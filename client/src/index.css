@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  min-height: 100vh;
+  background: #0D1117;
+  color: #FFFFFF;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+@layer utilities {
+  .bg-card {
+    box-shadow: 0 0 24px rgb(0 210 255 / 8%);
+  }
+}
+
+::selection { background: #FF3B30; color: #FFFFFF; }
+input, select, textarea {
+  border: 1px solid #00D2FF;
+  color: #FFFFFF;
+}
+input::placeholder, textarea::placeholder { color: #FFFFFF; opacity: 0.65; }
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid #00D2FF;
+  outline-offset: 2px;
+}
+option { background: #1C1F26; color: #FFFFFF; }
