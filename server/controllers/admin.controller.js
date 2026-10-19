@@ -5,7 +5,7 @@ import Lead from '../models/Lead.js';
 import Attendance from '../models/Attendance.js';
 import AuditLog from '../models/AuditLog.js';
 
-async function getAdminOverview(_req, res, next) {
+export async function getAdminOverview(_req, res, next) {
   try {
     const now = new Date();
     const sevenDaysFromNow = new Date(now.getTime() + 7 * 86400000);
@@ -62,7 +62,7 @@ async function getAdminOverview(_req, res, next) {
   }
 }
 
-async function listAuditEvents(_req, res, next) {
+export async function listAuditEvents(_req, res, next) {
   try {
     const auditEvents = await AuditLog.find().sort({ createdAt: -1 }).limit(200);
     res.json({ audit: auditEvents });
@@ -71,7 +71,7 @@ async function listAuditEvents(_req, res, next) {
   }
 }
 
-async function createStaffAccount(req, res, next) {
+export async function createStaffAccount(req, res, next) {
   try {
     const { name, email, password } = req.body;
     const staffMember = new User({ name, email, role: 'staff' });
@@ -83,4 +83,4 @@ async function createStaffAccount(req, res, next) {
   }
 }
 
-export { getAdminOverview, listAuditEvents, createStaffAccount };
+// export { getAdminOverview, listAuditEvents, createStaffAccount };

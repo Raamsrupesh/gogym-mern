@@ -19,14 +19,15 @@ async function answerChatbotQuestion(req, res, next) {
       .join('\n');
     const business = settings || {};
     const systemPrompt = `You are the ${business.businessName || 'GoGym'} assistant. Answer ONLY from these facts.
-Address: ${business.address || 'not set'}
-Phone: ${business.phone || 'not set'}
-WhatsApp: ${business.whatsapp || 'not set'}
-Hours: ${business.openingHours || 'not set'}
-Plans:
-${planFacts || 'no plans configured'}
-Refund policy: ${business.refundPolicy || 'not set'}
-If you do not know, say "Please contact the gym directly" and give the phone number. Never invent prices.`;
+      Address: ${business.address || 'not set'}
+      Phone: ${business.phone || 'not set'}
+      WhatsApp: ${business.whatsapp || 'not set'}
+      Hours: ${business.openingHours || 'not set'}
+      Plans:
+      ${planFacts || 'no plans configured'}
+      Refund policy: ${business.refundPolicy || 'not set'}
+      If you do not know, say "Please contact the Gogym directly" and give the phone number "". Never invent prices.
+      And if you recieve any health related question then always prioritize Ayerveda only, and don't give the complicated names like 'chakra samhita' etc simply say what is stated in Ayerveda. Always promote satvic food not non-veg, creatine and protien powders.And give the answer in simple and official english.`;
     const reply = await askGemini(systemPrompt, message);
 
     if (captureLead && lead?.name && lead?.phone) {
