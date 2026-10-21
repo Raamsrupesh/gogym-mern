@@ -21,8 +21,24 @@ async function listAllPlans(_req, res, next) {
 
 async function createPlan(req, res, next) {
   try {
-    const { name, description, priceInPaise, joiningFeeInPaise, durationDays, benefits, active, order } = req.body;
-    if (!name || !Number.isInteger(priceInPaise) || !Number.isInteger(durationDays)) {
+    const {
+      name,
+      description,
+      priceInPaise,
+      originalPriceInPaise = 0,
+      joiningFeeInPaise,
+      durationDays,
+      benefits,
+      active,
+      order,
+    } = req.body;
+    if (
+      !name ||
+      !Number.isInteger(priceInPaise) ||
+      !Number.isInteger(originalPriceInPaise) ||
+      originalPriceInPaise < 0 ||
+      !Number.isInteger(durationDays)
+    ) {
       return res.status(400).json({ error: 'Invalid plan' });
     }
 
@@ -30,6 +46,7 @@ async function createPlan(req, res, next) {
       name,
       description,
       priceInPaise,
+      originalPriceInPaise,
       joiningFeeInPaise: joiningFeeInPaise || 0,
       durationDays,
       benefits: benefits || [],

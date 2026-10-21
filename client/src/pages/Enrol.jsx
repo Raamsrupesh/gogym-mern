@@ -52,11 +52,27 @@ export default function Enrol() {
   if (!plan) return <p className="p-8 text-white">Select a plan first.</p>;
 
   const total = plan.priceInPaise + (plan.joiningFeeInPaise || 0);
+  const originalPrice = Number(plan.originalPriceInPaise || 0);
+  const hasOffer = originalPrice > plan.priceInPaise;
 
   return (
     <main className="mx-auto max-w-xl px-6 py-16">
       <h1 className="text-3xl font-black">Enrol — {plan.name}</h1>
-      <p className="mt-2 text-white">{plan.durationDays} days · Total ₹{(total / 100).toLocaleString('en-IN')}</p>
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-2 text-white">
+        {hasOffer && (
+          <span className="text-sm text-white/70">
+            Original <span className="line-through">₹{(originalPrice / 100).toLocaleString('en-IN')}</span>
+            {' · '}
+          </span>
+        )}
+        <span className="font-bold text-electricblue">
+          {hasOffer ? 'Discounted price' : 'Price'}: ₹{(plan.priceInPaise / 100).toLocaleString('en-IN')}
+        </span>
+        {(plan.joiningFeeInPaise || 0) > 0 && (
+          <span>+ ₹{(plan.joiningFeeInPaise / 100).toLocaleString('en-IN')} joining fee</span>
+        )}
+        <span>· {plan.durationDays} days · Total ₹{(total / 100).toLocaleString('en-IN')}</span>
+      </div>
       <form onSubmit={pay} className="mt-8 space-y-3 rounded-2xl border border-electricblue bg-card p-6">
         {!user && (
           <>

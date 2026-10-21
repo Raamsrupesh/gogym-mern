@@ -17,7 +17,7 @@ async function checkInMember(req, res, next) {
       method: 'manual',
       staff: req.user.sub,
     });
-    res.json({ attendance });
+    res.status(201).json({ attendance });
   } catch (error) {
     next(error);
   }

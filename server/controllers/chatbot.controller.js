@@ -33,7 +33,7 @@ async function answerChatbotQuestion(req, res, next) {
     if (captureLead && lead?.name && lead?.phone) {
       await Lead.create({ ...lead, source: 'chatbot' });
     }
-    res.json({ reply });
+    res.status(200).json({ reply });
   } catch (error) {
     next(error);
   }

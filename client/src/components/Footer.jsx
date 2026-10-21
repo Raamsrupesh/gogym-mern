@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 
 const DEMO_WHATSAPP_NUMBER = '+91 93989 79871';
+const DEVELOPER = {
+  name: 'Rupesh Yerra',
+  linkedin: 'https://www.linkedin.com/in/rupeshyerra/',
+  whatsapp: '8328595988',
+};
 const SOCIAL_LINKS = [
   { name: 'LinkedIn', href: 'https://www.linkedin.com/', icon: 'linkedin' },
   { name: 'WhatsApp', href: `https://wa.me/${DEMO_WHATSAPP_NUMBER}`, icon: 'whatsapp' },
@@ -38,17 +43,37 @@ export default function Footer() {
 
   const phoneDigits = (settings.whatsapp || DEMO_WHATSAPP_NUMBER).replace(/\D/g, '');
   const whatsappUrl = `https://wa.me/${phoneDigits}?text=${encodeURIComponent('Hello Sir, I just have some queries regarding Gogym!')}`;
+  const developerWhatsappDigits = DEVELOPER.whatsapp.replace(/\D/g, '');
 
   return (
     <footer className="border-t border-electricblue bg-card text-white">
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-6 py-12 md:grid-cols-[1.4fr_1fr_1fr]">
         <div>
           <Link to="/" className="font-techno text-2xl font-black italic tracking-tight">Go <span className="text-gymred">Gym</span></Link>
-          <p className="mt-3 max-w-sm text-sm leading-6 text-white">
+          <p className="mt-3 mb-3 max-w-sm text-sm leading-6 text-white">
             {settings.businessName || 'GoGym'} · Make your next move a strong one.
           </p>
-          {settings.address && <p className="mt-2 text-sm text-white">{settings.address}</p>}
-          {settings.phone && <a className="mt-2 inline-block text-sm text-white hover:text-white" href={`tel:${settings.phone}`}>{settings.phone}</a>}
+          <h2 className="flex items-center gap-2 font-bold">
+          {/* <span className="h-2 w-2 rounded-full bg-electricblue" /> */}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            fill="currentColor"
+            className="bi bi-geo-alt-fill"
+            viewBox="0 0 16 16"
+          >
+            <path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10m0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6" />
+          </svg>
+          Location:
+        </h2>
+
+        <p className="mt-1 max-w-sm text-sm leading-6 text-white">
+          GOGYM, GELLA BUILDING 2nd Floor, consumer court, besides, Shivaji Colony, Pradeep Nagar, Vizianagaram, Andhra Pradesh 535004.
+        </p>
+{settings.phone && <a className="mt-2 inline-block text-sm text-white hover:text-white" href={`tel:${settings.phone}`}>{settings.phone}</a>}
+
+          <a href='https://www.linkedin.com/in/rupeshyerra/' target="_blank" className="inline-flex shrink-0 items-center justify-center rounded-full bg-gymred px-7 py-3.5 font-bold text-white transition hover:shadow-[0_0_20px_#00D2FF] mt-3"> MEET THE DEVELOPER <span className="ml-2" aria-hidden="true"> → </span></a>
         </div>
 
         <div>
@@ -96,7 +121,32 @@ export default function Footer() {
         </div>
       </div>
       <div className="border-t border-electricblue">
-        <p className="mx-auto max-w-6xl px-6 py-4 text-xs text-white">© {new Date().getFullYear()} {settings.businessName || 'GoGym'}. All rights reserved.</p>
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-4 text-xs text-white sm:flex-row sm:items-center sm:justify-between">
+          <p>© {new Date().getFullYear()} {settings.businessName || 'GoGym'}. All rights reserved.</p>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-white/70">Built by</span>
+            <a
+              href={DEVELOPER.linkedin}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Meet the developer, ${DEVELOPER.name}, on LinkedIn`}
+              className="font-semibold text-white underline-offset-2 transition-colors hover:text-electricblue hover:underline"
+            >
+              Meet the developer
+            </a>
+            <span aria-hidden className="text-white/40">·</span>
+            <a
+              href={`https://wa.me/91${developerWhatsappDigits}`}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`WhatsApp the developer at ${DEVELOPER.whatsapp}`}
+              className="inline-flex items-center gap-1 font-semibold text-white underline-offset-2 transition-colors hover:text-electricblue hover:underline"
+            >
+              <SocialIcon name="whatsapp" />
+              {DEVELOPER.whatsapp}
+            </a>
+          </p>
+        </div>
       </div>
     </footer>
   );

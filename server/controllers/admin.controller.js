@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import Membership from '../models/Membership.js';
 import Payment from '../models/Payment.js';
+import Plan from '../models/Plan.js';
 import Lead from '../models/Lead.js';
 import Attendance from '../models/Attendance.js';
 import AuditLog from '../models/AuditLog.js';
@@ -45,7 +46,7 @@ export async function getAdminOverview(_req, res, next) {
         .populate('member', 'name'),
     ]);
 
-    res.json({
+    res.status(200).json({
       stats: {
         members: memberCount,
         activeMemberships: activeMembershipCount,
@@ -83,4 +84,13 @@ export async function createStaffAccount(req, res, next) {
   }
 }
 
+export async function deletePlan(req, res, next) {
+  try {
+    const plan = await Plan.findByIdAndDelete(req.params.id);
+    if (!plan) return res.status(404).json({ error: 'Plan not found' });
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+}
 // export { getAdminOverview, listAuditEvents, createStaffAccount };

@@ -119,41 +119,320 @@ function Overview() {
   );
 }
 
+const EMPTY_FORM = {
+  name: '',
+  description: '',
+  originalPrice: '',   // rupees — MRP, shown struck through
+  offerPrice: '',      // rupees — what the member actually pays
+  durationDays: 30,
+  joiningFee: '',
+  active: true,        // only used while editing
+};
+
+const toPaise = (value) => Math.round(Number(value || 0) * 100);
+const inr = (paise) => `₹${(Number(paise || 0) / 100).toLocaleString('en-IN')}`;
+
+function PencilIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  );
+}
+
 function PlansTab() {
   const [plans, setPlans] = useState([]);
-  const [form, setForm] = useState({ name: '', description: '', priceInPaise: 0, durationDays: 30, joiningFeeInPaise: 0 });
-  async function load() { setPlans((await api.get('/plans/all')).plans); }
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [editingId, setEditingId] = useState(null);
+  const [error, setError] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+
+  async function load() {
+    const data = await api.get('/plans/all');
+    setPlans(data.plans || []);
+  }
   useEffect(() => { load(); }, []);
+
+  function resetForm() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setError('');
+  }
+
+  function startEdit(p) {
+    setEditingId(p._id);
+    setError('');
+    setForm({
+      name: p.name || '',
+      description: p.description || '',
+      originalPrice: p.originalPriceInPaise ? String(p.originalPriceInPaise / 100) : '',
+      offerPrice: p.priceInPaise ? String(p.priceInPaise / 100) : '',
+      durationDays: p.durationDays || 30,
+      joiningFee: p.joiningFeeInPaise ? String(p.joiningFeeInPaise / 100) : '',
+      active: p.active !== false,
+    });
+  }
+
   async function save(e) {
     e.preventDefault();
-    await api.post('/plans', { ...form, priceInPaise: Number(form.priceInPaise), durationDays: Number(form.durationDays), joiningFeeInPaise: Number(form.joiningFeeInPaise) });
-    setForm({ name: '', description: '', priceInPaise: 0, durationDays: 30, joiningFeeInPaise: 0 });
+    const original = toPaise(form.originalPrice);
+    const offer = toPaise(form.offerPrice);
+
+    if (offer <= 0) { setError('Offer price must be greater than ₹0.'); return; }
+    if (original && original < offer) {
+      setError('Original price cannot be lower than the offer price.');
+      return;
+    }
+    setError('');
+
+    const payload = {
+      name: form.name,
+      description: form.description,
+      priceInPaise: offer,
+      originalPriceInPaise: original > offer ? original : 0,
+      durationDays: Number(form.durationDays) || 30,
+      joiningFeeInPaise: toPaise(form.joiningFee),
+    };
+
+    try {
+      if (editingId) {
+        await api.patch(`/plans/${editingId}`, { ...payload, active: !!form.active });
+      } else {
+        await api.post('/plans', payload);
+      }
+      resetForm();
+      await load();
+    } catch {
+      setError(editingId
+        ? 'Could not update the plan. Please try again.'
+        : 'Could not create the plan. Please try again.');
+    }
+  }
+
+  async function toggle(p) {
+    await api.patch(`/plans/${p._id}`, { active: !p.active });
     await load();
   }
-  async function toggle(p) { await api.patch(`/plans/${p._id}`, { active: !p.active }); await load(); }
+
+  async function remove(p) {
+    const msg =
+      `Permanently delete "${p.name}"?`;
+    if (!window.confirm(msg)) return;
+
+    setDeletingId(p._id);
+    setError('');
+    try {
+      await api.delete(`/admin/plans/${p._id}`);
+      if (editingId === p._id) resetForm();
+      await load();
+    } catch (err) {
+      setError(err.message || 'Could not delete the plan. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  // live preview of how the member will see this plan
+  const previewOriginal = toPaise(form.originalPrice);
+  const previewOffer = toPaise(form.offerPrice);
+  const previewHasOffer = previewOriginal > previewOffer && previewOffer > 0;
+  const previewOff = previewHasOffer
+    ? Math.round(((previewOriginal - previewOffer) / previewOriginal) * 100)
+    : 0;
+
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <div>
         <h3 className="font-bold">Existing plans</h3>
         <div className="mt-2 space-y-2">
-          {plans.map((p) => (
-            <div key={p._id} className="flex items-center justify-between rounded-xl border border-electricblue bg-card p-3">
-              <div>
-                <p className="font-semibold">{p.name} {p.active ? '' : '(inactive)'}</p>
-                <p className="text-sm text-white">₹{p.priceInPaise / 100} · {p.durationDays}d</p>
+          {plans.length === 0 && (
+            <p className="rounded-xl border border-dashed border-electricblue p-3 text-sm text-white/70">
+              No plans yet. Create one on the right.
+            </p>
+          )}
+          {plans.map((p) => {
+            const hasOriginal = Number(p.originalPriceInPaise) > 0;
+            const onOffer = hasOriginal && Number(p.originalPriceInPaise) > Number(p.priceInPaise);
+            const off = onOffer
+              ? Math.round(((p.originalPriceInPaise - p.priceInPaise) / p.originalPriceInPaise) * 100)
+              : 0;
+            const isDeleting = deletingId === p._id;
+            return (
+              <div
+                key={p._id}
+                className={`flex items-center justify-between gap-3 rounded-xl border bg-card p-3 transition ${
+                  editingId === p._id ? 'border-gymred' : 'border-electricblue'
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold">
+                    {p.name} {p.active ? '' : <span className="text-white/60">(inactive)</span>}
+                  </p>
+                  <p className="flex flex-wrap items-baseline gap-2 text-sm text-white">
+                    {hasOriginal ? (
+                      <span className="opacity-60">
+                        Original <span className={onOffer ? 'line-through' : ''}>{inr(p.originalPriceInPaise)}</span>
+                      </span>
+                    ) : (
+                      <span className="text-white/60">Original price not set</span>
+                    )}
+                    <span className="font-bold text-electricblue">
+                      {onOffer ? 'Discounted' : 'Price'} {inr(p.priceInPaise)}
+                    </span>
+                    <span>· {p.durationDays}d</span>
+                    {onOffer && (
+                      <span className="rounded-full bg-gymred/20 px-2 py-0.5 text-xs font-bold text-gymred">
+                        {off}% OFF
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => toggle(p)}
+                    className="rounded-full border border-electricblue px-3 py-1 text-xs hover:border-electricblue"
+                    title={p.active ? 'Deactivate plan' : 'Activate plan'}
+                  >
+                    {p.active ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => startEdit(p)}
+                    aria-label={`Edit ${p.name}`}
+                    title="Edit plan"
+                    className="rounded-full border border-electricblue p-1.5 text-white transition hover:bg-electricblue hover:text-charcoal"
+                  >
+                    <PencilIcon />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(p)}
+                    disabled={isDeleting}
+                    aria-label={`Delete ${p.name}`}
+                    title="Delete plan"
+                    className="rounded-full border border-gymred p-1.5 text-gymred transition hover:bg-gymred hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
               </div>
-              <button onClick={() => toggle(p)} className="rounded-full border border-electricblue px-3 py-1 text-xs hover:border-electricblue">{p.active ? 'Deactivate' : 'Activate'}</button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
+
       <form onSubmit={save} className="space-y-2 rounded-2xl border border-electricblue bg-card p-4">
-        <h3 className="font-bold">Create plan</h3>
-        <input required placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full rounded-lg bg-card px-3 py-2 text-sm" />
-        <input placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full rounded-lg bg-card px-3 py-2 text-sm" />
-        <input required type="number" placeholder="Price in paise" value={form.priceInPaise} onChange={(e) => setForm({ ...form, priceInPaise: e.target.value })} className="w-full rounded-lg bg-card px-3 py-2 text-sm" />
-        <input required type="number" placeholder="Duration days" value={form.durationDays} onChange={(e) => setForm({ ...form, durationDays: e.target.value })} className="w-full rounded-lg bg-card px-3 py-2 text-sm" />
-        <button className="w-full rounded-full bg-gymred px-4 py-2 font-bold text-white">Save plan</button>
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold">{editingId ? 'Edit plan' : 'Create plan'}</h3>
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="text-xs font-semibold text-white/70 transition hover:text-white"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+
+        <input required placeholder="Name" value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          className="w-full rounded-lg bg-card px-3 py-2 text-sm" />
+
+        <input placeholder="Description" value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          className="w-full rounded-lg bg-card px-3 py-2 text-sm" />
+
+        <label className="block text-xs font-semibold text-white">Original price (₹) — shown struck through</label>
+        <input type="number" min="0" step="1" required placeholder="e.g. 2500" value={form.originalPrice}
+          onChange={(e) => setForm({ ...form, originalPrice: e.target.value })}
+          className="w-full rounded-lg bg-card px-3 py-2 text-sm" />
+
+        <label className="block text-xs font-semibold text-white">Offer price (₹) — what the member pays</label>
+        <input type="number" min="1" step="1" required placeholder="e.g. 2000" value={form.offerPrice}
+          onChange={(e) => setForm({ ...form, offerPrice: e.target.value })}
+          className="w-full rounded-lg bg-card px-3 py-2 text-sm" />
+
+        <input required type="number" min="1" placeholder="Duration days" value={form.durationDays}
+          onChange={(e) => setForm({ ...form, durationDays: e.target.value })}
+          className="w-full rounded-lg bg-card px-3 py-2 text-sm" />
+
+        <input type="number" min="0" placeholder="Joining fee (₹, optional)" value={form.joiningFee}
+          onChange={(e) => setForm({ ...form, joiningFee: e.target.value })}
+          className="w-full rounded-lg bg-card px-3 py-2 text-sm" />
+
+        {editingId && (
+          <label className="flex items-center gap-2 text-xs font-semibold text-white">
+            <input
+              type="checkbox"
+              checked={!!form.active}
+              onChange={(e) => setForm({ ...form, active: e.target.checked })}
+              className="accent-electricblue"
+            />
+            Active (visible to members)
+          </label>
+        )}
+
+        {error && <p className="text-xs font-semibold text-gymred">{error}</p>}
+
+        {previewOffer > 0 && (
+          <div className="rounded-xl border border-dashed border-electricblue p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-white">Member preview</p>
+            <div className="mt-1 flex flex-wrap items-end gap-3">
+              {previewHasOffer && (
+                <p className="text-sm text-white/70">
+                  <span className="block text-[10px]">Original price</span>
+                  <span className="font-semibold line-through">{inr(previewOriginal)}</span>
+                </p>
+              )}
+              <p className="text-electricblue">
+                <span className="block text-[10px] text-white/70">{previewHasOffer ? 'Discounted price' : 'Price'}</span>
+                <span className="text-2xl font-black">{inr(previewOffer)}</span>
+              </p>
+              {previewHasOffer && (
+                <span className="rounded-full bg-gymred px-2 py-0.5 text-[10px] font-black text-white">
+                  {previewOff}% OFF
+                </span>
+              )}
+            </div>
+            {previewHasOffer && (
+              <p className="text-xs font-semibold text-gymred">
+                You save {inr(previewOriginal - previewOffer)}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="w-full rounded-full border border-electricblue px-4 py-2 font-bold text-white"
+            >
+              Cancel
+            </button>
+          )}
+          <button className="w-full rounded-full bg-gymred px-4 py-2 font-bold text-white">
+            {editingId ? 'Update plan' : 'Save plan'}
+          </button>
+        </div>
       </form>
     </div>
   );
