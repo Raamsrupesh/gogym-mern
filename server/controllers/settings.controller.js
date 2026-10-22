@@ -23,6 +23,10 @@ async function getAdminSettings(_req, res, next) {
 
 async function updateSettings(req, res, next) {
   try {
+    if (req.body.chatbotKnowledge !== undefined &&
+      (typeof req.body.chatbotKnowledge !== 'string' || req.body.chatbotKnowledge.length > 5000)) {
+      return res.status(400).json({ error: 'Chatbot guidance must be text of 5,000 characters or fewer' });
+    }
     const settings = await Settings.findOneAndUpdate(
       { singleton: 'main' },
       { $set: req.body },

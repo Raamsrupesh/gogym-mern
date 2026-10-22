@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 
 const WELCOME =
-  "Hello! 👋 I'm your GoGym assistant. Ask me about plans, timings, or how to join.";
+  "Hello! 👋 I'm your GoGym assistant. Ask me about plans, gym services, referrals, or—when signed in—your workouts, progress, attendance, and published trainer feedback.";
 
 const ROBOT_STYLES = `
 @keyframes gg-wave {

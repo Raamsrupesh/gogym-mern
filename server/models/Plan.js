@@ -8,6 +8,7 @@ const planSchema = new mongoose.Schema({
   joiningFeeInPaise: { type: Number, default: 0, min: 0 },
   durationDays: { type: Number, required: true, min: 1 },
   benefits: [String],
+  dietGuidance: { type: Boolean, default: false },
   active: { type: Boolean, default: true, index: true },
   order: { type: Number, default: 0 },
 }, { timestamps: true });

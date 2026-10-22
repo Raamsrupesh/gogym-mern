@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import BrandLogo from './BrandLogo';
 
 const DEMO_WHATSAPP_NUMBER = '+91 93989 79871';
 const DEVELOPER = {
@@ -11,7 +12,7 @@ const DEVELOPER = {
 const SOCIAL_LINKS = [
   { name: 'LinkedIn', href: 'https://www.linkedin.com/', icon: 'linkedin' },
   { name: 'WhatsApp', href: `https://wa.me/${DEMO_WHATSAPP_NUMBER}`, icon: 'whatsapp' },
-  { name: 'Instagram', href: 'https://www.instagram.com/', icon: 'instagram' },
+  { name: 'Instagram', href: 'https://www.instagram.com/gogym_official_vzm?utm_source=qr&mdxt=aWFqa2F4NGRsZ2cz', icon: 'instagram' },
   { name: 'Facebook', href: 'https://www.facebook.com/', icon: 'facebook' },
 ];
 
@@ -49,7 +50,9 @@ export default function Footer() {
     <footer className="border-t border-electricblue bg-card text-white">
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-6 py-12 md:grid-cols-[1.4fr_1fr_1fr]">
         <div>
-          <Link to="/" className="font-techno text-2xl font-black italic tracking-tight">Go <span className="text-gymred">Gym</span></Link>
+          <Link to="/" aria-label="GoGym home" className="inline-flex">
+            <BrandLogo />
+          </Link>
           <p className="mt-3 mb-3 max-w-sm text-sm leading-6 text-white">
             {settings.businessName || 'GoGym'} · Make your next move a strong one.
           </p>
@@ -117,7 +120,7 @@ export default function Footer() {
               );
             })}
           </div>
-          <p className="mt-2 text-xs text-white">Replace the social links with your gym’s official profiles.</p>
+          {/* <p className="mt-2 text-xs text-white">Replace the social links with your gym’s official profiles.</p> */}
         </div>
       </div>
       <div className="border-t border-electricblue">

@@ -4,6 +4,7 @@ import Plan from '../models/Plan.js';
 import User from '../models/User.js';
 import Counter from '../models/Counter.js';
 import AuditLog from '../models/AuditLog.js';
+import { completeReferralForMember } from '../services/referrals.service.js';
 
 async function searchPayments(req, res, next) {
   try {
@@ -46,6 +47,7 @@ async function recordOfflinePayment(req, res, next) {
         durationDays: plan.durationDays,
         joiningFeeInPaise: plan.joiningFeeInPaise,
         benefits: plan.benefits,
+        dietGuidance: plan.dietGuidance,
       },
       startDate: now,
       expiryDate,
@@ -66,6 +68,7 @@ async function recordOfflinePayment(req, res, next) {
       paidAt: now,
       invoiceNumber,
     });
+    await completeReferralForMember(member._id);
     await AuditLog.create({
       actor: req.user.sub,
       action: 'payment.manual',

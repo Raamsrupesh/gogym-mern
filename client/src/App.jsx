@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import MemberDashboard from './pages/MemberDashboard';
 import Register from './pages/Register';
 import OwnerDashboard from './pages/OwnerDashboard';
+import TrainerDashboard from './pages/TrainerDashboard';
 import Chatbot from './components/Chatbot';
 import { useAuth } from './context/AuthContext';
 
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<Protected><MemberDashboard /></Protected>} />
         <Route path="/admin" element={<Protected role="owner"><OwnerDashboard /></Protected>} />
+        <Route path="/trainer" element={<Protected role="staff"><TrainerDashboard /></Protected>} />
       </Routes>
       <Chatbot />
       <Footer />

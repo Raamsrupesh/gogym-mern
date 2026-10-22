@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import FeatureWorkspace from '../components/FeatureWorkspace';
+import PlanPrice from '../components/PlanPrice';
 
-const TABS = ['Overview', 'Plans', 'Members', 'Payments', 'Leads', 'Attendance', 'Settings', 'Reminders'];
+const TABS = ['Overview', 'Plans', 'Members', 'Payments', 'Leads', 'Attendance', 'Settings', 'Reminders', 'Operations'];
 
 export default function OwnerDashboard() {
   const [tab, setTab] = useState('Overview');
@@ -25,6 +27,7 @@ export default function OwnerDashboard() {
         {tab === 'Attendance' && <AttendanceTab />}
         {tab === 'Settings' && <SettingsTab />}
         {tab === 'Reminders' && <RemindersTab />}
+        {tab === 'Operations' && <FeatureWorkspace mode="staff" />}
       </div>
     </main>
   );
@@ -115,6 +118,18 @@ function Overview() {
         ))}
         {d.recentPayments.length === 0 && <p className="p-3 text-white">No payments yet.</p>}
       </div>
+      <section className="mt-8 rounded-2xl border border-electricblue bg-card p-5">
+        <h3 className="font-bold">Equipment requiring attention</h3>
+        <div className="mt-2 divide-y divide-electricblue/30">
+          {(d.equipmentMaintenance || []).map((item) => (
+            <p key={item._id} className="flex flex-wrap justify-between gap-2 py-2 text-sm">
+              <span>{item.name}</span>
+              <span className="text-gymred">{item.status.replaceAll('_', ' ')}{item.nextMaintenanceAt ? ` · due ${new Date(item.nextMaintenanceAt).toLocaleDateString('en-IN')}` : ''}</span>
+            </p>
+          ))}
+          {!d.equipmentMaintenance?.length && <p className="py-2 text-sm text-white/60">No equipment maintenance is overdue or flagged.</p>}
+        </div>
+      </section>
     </div>
   );
 }
@@ -126,6 +141,7 @@ const EMPTY_FORM = {
   offerPrice: '',      // rupees — what the member actually pays
   durationDays: 30,
   joiningFee: '',
+  dietGuidance: false,
   active: true,        // only used while editing
 };
 
@@ -184,6 +200,7 @@ function PlansTab() {
       offerPrice: p.priceInPaise ? String(p.priceInPaise / 100) : '',
       durationDays: p.durationDays || 30,
       joiningFee: p.joiningFeeInPaise ? String(p.joiningFeeInPaise / 100) : '',
+      dietGuidance: p.dietGuidance === true,
       active: p.active !== false,
     });
   }
@@ -207,6 +224,7 @@ function PlansTab() {
       originalPriceInPaise: original > offer ? original : 0,
       durationDays: Number(form.durationDays) || 30,
       joiningFeeInPaise: toPaise(form.joiningFee),
+      dietGuidance: !!form.dietGuidance,
     };
 
     try {
@@ -251,9 +269,6 @@ function PlansTab() {
   const previewOriginal = toPaise(form.originalPrice);
   const previewOffer = toPaise(form.offerPrice);
   const previewHasOffer = previewOriginal > previewOffer && previewOffer > 0;
-  const previewOff = previewHasOffer
-    ? Math.round(((previewOriginal - previewOffer) / previewOriginal) * 100)
-    : 0;
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -268,9 +283,6 @@ function PlansTab() {
           {plans.map((p) => {
             const hasOriginal = Number(p.originalPriceInPaise) > 0;
             const onOffer = hasOriginal && Number(p.originalPriceInPaise) > Number(p.priceInPaise);
-            const off = onOffer
-              ? Math.round(((p.originalPriceInPaise - p.priceInPaise) / p.originalPriceInPaise) * 100)
-              : 0;
             const isDeleting = deletingId === p._id;
             return (
               <div
@@ -283,24 +295,8 @@ function PlansTab() {
                   <p className="truncate font-semibold">
                     {p.name} {p.active ? '' : <span className="text-white/60">(inactive)</span>}
                   </p>
-                  <p className="flex flex-wrap items-baseline gap-2 text-sm text-white">
-                    {hasOriginal ? (
-                      <span className="opacity-60">
-                        Original <span className={onOffer ? 'line-through' : ''}>{inr(p.originalPriceInPaise)}</span>
-                      </span>
-                    ) : (
-                      <span className="text-white/60">Original price not set</span>
-                    )}
-                    <span className="font-bold text-electricblue">
-                      {onOffer ? 'Discounted' : 'Price'} {inr(p.priceInPaise)}
-                    </span>
-                    <span>· {p.durationDays}d</span>
-                    {onOffer && (
-                      <span className="rounded-full bg-gymred/20 px-2 py-0.5 text-xs font-bold text-gymred">
-                        {off}% OFF
-                      </span>
-                    )}
-                  </p>
+                  <PlanPrice original={hasOriginal ? p.originalPriceInPaise : 0} price={p.priceInPaise} hasOffer={onOffer} />
+                  <p className="mt-1 text-xs text-white/70">{p.durationDays} days · Diet guidance {p.dietGuidance ? 'included' : 'not included'}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
@@ -377,6 +373,16 @@ function PlansTab() {
           onChange={(e) => setForm({ ...form, joiningFee: e.target.value })}
           className="w-full rounded-lg bg-card px-3 py-2 text-sm" />
 
+        <label className="flex items-center gap-2 text-sm font-semibold text-white">
+          <input
+            type="checkbox"
+            checked={!!form.dietGuidance}
+            onChange={(e) => setForm({ ...form, dietGuidance: e.target.checked })}
+            className="accent-electricblue"
+          />
+          This plan includes dedicated diet guidance
+        </label>
+
         {editingId && (
           <label className="flex items-center gap-2 text-xs font-semibold text-white">
             <input
@@ -394,28 +400,7 @@ function PlansTab() {
         {previewOffer > 0 && (
           <div className="rounded-xl border border-dashed border-electricblue p-3">
             <p className="text-[10px] font-bold uppercase tracking-wide text-white">Member preview</p>
-            <div className="mt-1 flex flex-wrap items-end gap-3">
-              {previewHasOffer && (
-                <p className="text-sm text-white/70">
-                  <span className="block text-[10px]">Original price</span>
-                  <span className="font-semibold line-through">{inr(previewOriginal)}</span>
-                </p>
-              )}
-              <p className="text-electricblue">
-                <span className="block text-[10px] text-white/70">{previewHasOffer ? 'Discounted price' : 'Price'}</span>
-                <span className="text-2xl font-black">{inr(previewOffer)}</span>
-              </p>
-              {previewHasOffer && (
-                <span className="rounded-full bg-gymred px-2 py-0.5 text-[10px] font-black text-white">
-                  {previewOff}% OFF
-                </span>
-              )}
-            </div>
-            {previewHasOffer && (
-              <p className="text-xs font-semibold text-gymred">
-                You save {inr(previewOriginal - previewOffer)}
-              </p>
-            )}
+            <PlanPrice original={previewOriginal} price={previewOffer} hasOffer={previewHasOffer} />
           </div>
         )}
 
@@ -525,18 +510,15 @@ function LeadsTab() {
 }
 
 function AttendanceTab() {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
   const [items, setItems] = useState([]);
-  const [memberId, setMemberId] = useState('');
   async function load() { setItems((await api.get(`/attendance?date=${date}`)).attendance); }
   useEffect(() => { load(); }, [date]);
-  async function checkIn() { await api.post('/attendance/check-in', { memberId }); setMemberId(''); await load(); }
   return (
     <div>
+      <p className="mb-3 text-sm text-white/60">QR and manual check-in have been removed. Attendance entry will be connected to the gym fingerprint system when its integration details are available.</p>
       <div className="flex gap-2">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded bg-card px-3 py-2 text-sm" />
-        <input placeholder="Member ID for check-in" value={memberId} onChange={(e) => setMemberId(e.target.value)} className="flex-1 rounded bg-card px-3 py-2 text-sm" />
-        <button onClick={checkIn} className="rounded-full bg-gymred px-4 py-2 text-sm font-bold text-white">Check in</button>
       </div>
       <div className="mt-3 divide-y divide-electricblue rounded-2xl border border-electricblue">
         {items.map((a) => (
@@ -579,6 +561,11 @@ function SettingsTab() {
         <span className="text-white">Refund policy</span>
         <textarea value={s.refundPolicy || ''} onChange={(e) => setS({ ...s, refundPolicy: e.target.value })} className="mt-1 w-full rounded-lg bg-card px-3 py-2" rows={3} />
       </label>
+      <label className="block text-sm md:col-span-2">
+        <span className="text-white">Chatbot business guidance</span>
+        <textarea value={s.chatbotKnowledge || ''} onChange={(e) => setS({ ...s, chatbotKnowledge: e.target.value })} className="mt-1 w-full rounded-lg bg-card px-3 py-2" rows={5} maxLength={5000} placeholder="Add public gym information, common questions, and approved guidance for the chatbot." />
+        <span className="mt-1 block text-xs text-white/60">Do not add member-specific, confidential, or sensitive information.</span>
+      </label>
       <button className="rounded-full bg-gymred px-4 py-2 font-bold text-white md:col-span-2">Save settings</button>
     </form>
   );
@@ -586,16 +573,107 @@ function SettingsTab() {
 
 function RemindersTab() {
   const [items, setItems] = useState([]);
-  useEffect(() => { api.get('/reminders').then((d) => setItems(d.reminders)); }, []);
+  const [expiryItems, setExpiryItems] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [form, setForm] = useState(() => {
+    const at = new Date(Date.now() + 60 * 60 * 1000);
+    at.setMinutes(at.getMinutes() - at.getTimezoneOffset());
+    return {
+      memberId: 'all',
+      title: '',
+      message: '',
+      scheduledAt: at.toISOString().slice(0, 16),
+    };
+  });
+
+  async function refresh() {
+    setError('');
+    try {
+      const [custom, expiry] = await Promise.all([api.get('/reminders/custom'), api.get('/reminders')]);
+      setItems(custom.reminders);
+      setExpiryItems(expiry.reminders);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  useEffect(() => {
+    refresh();
+    api.get('/members?limit=500').then((data) => setMembers(data.members || [])).catch((e) => setError(e.message));
+  }, []);
+
+  async function createReminder(e) {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    try {
+      const result = await api.post('/reminders/custom', { ...form, scheduledAt: new Date(form.scheduledAt).toISOString() });
+      setMessage(`Created ${result.created} reminder${result.created === 1 ? '' : 's'}.`);
+      setForm({ ...form, title: '', message: '' });
+      await refresh();
+    } catch (e2) {
+      setError(e2.message);
+    }
+  }
+
+  async function deleteReminder(id) {
+    setError('');
+    try {
+      await api.delete(`/reminders/custom/${id}`);
+      await refresh();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
   return (
-    <div className="divide-y divide-electricblue rounded-2xl border border-electricblue">
-      {items.map((r) => (
-        <div key={r._id} className="flex justify-between p-3 text-sm">
-          <span>{r.member?.name || '—'} · stage {r.stage}</span>
-          <span className={r.status === 'failed' ? 'text-gymred' : 'text-white'}>{r.status}</span>
+    <div className="space-y-8">
+      {error && <p role="alert" className="rounded-lg border border-gymred/60 p-3 text-sm text-gymred">{error}</p>}
+      {message && <p role="status" className="rounded-lg border border-electricblue/40 p-3 text-sm text-electricblue">{message}</p>}
+      <form onSubmit={createReminder} className="grid gap-3 rounded-2xl border border-electricblue bg-card p-5 md:grid-cols-2">
+        <h2 className="text-xl font-bold md:col-span-2">Create a member reminder</h2>
+        <label className="text-sm">Send to
+          <select required className="mt-1 w-full rounded-lg bg-charcoal px-3 py-2" value={form.memberId} onChange={(e) => setForm({ ...form, memberId: e.target.value })}>
+            <option value="all">All active members</option>
+            {members.map((member) => <option key={member._id} value={member._id}>{member.name} · {member.email}</option>)}
+          </select>
+        </label>
+        <label className="text-sm">Send at
+          <input type="datetime-local" required className="mt-1 w-full rounded-lg bg-charcoal px-3 py-2" value={form.scheduledAt} onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} />
+        </label>
+        <label className="text-sm md:col-span-2">Subject
+          <input required maxLength="160" className="mt-1 w-full rounded-lg bg-charcoal px-3 py-2" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        </label>
+        <label className="text-sm md:col-span-2">Message
+          <textarea required maxLength="2000" rows="4" className="mt-1 w-full rounded-lg bg-charcoal px-3 py-2" value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
+        </label>
+        <button className="rounded-full bg-gymred px-5 py-2 font-bold text-white md:col-span-2">Schedule reminder</button>
+        <p className="text-xs text-white/60 md:col-span-2">Reminders are delivered by email at the scheduled time. Configure SMTP to enable delivery; sent and failed attempts are recorded.</p>
+      </form>
+
+      <section>
+        <h2 className="mb-3 text-xl font-bold">Admin-created reminders</h2>
+        <div className="divide-y divide-electricblue rounded-2xl border border-electricblue">
+          {items.map((item) => <article key={item._id} className="flex flex-wrap items-center justify-between gap-3 p-3 text-sm">
+            <div><p className="font-semibold">{item.title} · {item.member?.name || 'Member'}</p><p className="text-white/80">{item.message}</p><p className="text-white/60">{new Date(item.scheduledAt).toLocaleString('en-IN')} · {item.status}</p>{item.error && <p className="text-gymred">{item.error}</p>}</div>
+            <button onClick={() => deleteReminder(item._id)} className="rounded border border-gymred px-3 py-1 text-gymred">Delete</button>
+          </article>)}
+          {!items.length && <p className="p-3 text-white">No admin-created reminders yet.</p>}
         </div>
-      ))}
-      {items.length === 0 && <p className="p-3 text-white">No reminders yet.</p>}
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-xl font-bold">Automatic membership expiry reminders</h2>
+        <div className="divide-y divide-electricblue rounded-2xl border border-electricblue">
+          {expiryItems.map((item) => <div key={item._id} className="flex justify-between p-3 text-sm">
+            <span>{item.member?.name || '—'} · expires in {item.stage}</span>
+            <span className={item.status === 'failed' ? 'text-gymred' : 'text-white'}>{item.status}</span>
+          </div>)}
+          {!expiryItems.length && <p className="p-3 text-white">No automatic expiry reminders yet.</p>}
+        </div>
+      </section>
     </div>
   );
 }

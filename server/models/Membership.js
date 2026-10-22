@@ -5,7 +5,7 @@ const membershipSchema = new mongoose.Schema({
   plan: { type: mongoose.Schema.Types.ObjectId, ref: 'Plan', required: true },
   planSnapshot: {
     name: String, priceInPaise: Number, durationDays: Number,
-    joiningFeeInPaise: Number, benefits: [String],
+    joiningFeeInPaise: Number, benefits: [String], dietGuidance: { type: Boolean, default: false },
   },
   startDate: { type: Date, required: true },
   expiryDate: { type: Date, required: true, index: true },

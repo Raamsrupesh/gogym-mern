@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import { useAuth } from '../context/AuthContext';
+import PlanPrice from '../components/PlanPrice';
 
 const MAPS_URL =
   'https://www.google.com/maps/place/GOGYM/@18.0957227,83.3881277,17z/data=!3m1!4b1!4m6!3m5!1s0x3a3be52f91a66d3b:0x2e2a40be65c36a47!8m2!3d18.0957227!4d83.3907026!16s%2Fg%2F11vc3q746n?entry=ttu&g_ep=EgoyMDI2MTAxOC4wIKXMDSoASAFQAw%3D%3D';
@@ -21,6 +23,15 @@ const services = [
   { number: '06', title: 'Functional Fitness', description: 'Everyday movement patterns made stronger — so lifting, carrying, and living all feel easier.' },
 ];
 
+const gymPhotos = [
+  { src: 'https://res.cloudinary.com/dbeasd4ey/image/upload/v1792635608/gogym1.jpg', alt: 'GoGym training floor and equipment' },
+  { src: 'https://res.cloudinary.com/dbeasd4ey/image/upload/v1792635608/gogym4.jpg', alt: 'GoGym gym equipment and workout area' },
+  { src: 'https://res.cloudinary.com/dbeasd4ey/image/upload/v1792635608/gogym3.jpg', alt: 'GoGym strength training space' },
+  { src: 'https://res.cloudinary.com/dbeasd4ey/image/upload/v1792635608/gogym5.jpg', alt: 'GoGym fitness and conditioning area' },
+  { src: 'https://res.cloudinary.com/dbeasd4ey/image/upload/v1792635607/gogym6.jpg', alt: 'GoGym workout equipment' },
+  { src: 'https://res.cloudinary.com/dbeasd4ey/image/upload/v1792635608/gogym-2.jpg', alt: 'Inside GoGym' },
+];
+
 const inr = (paise) => `₹${(Number(paise || 0) / 100).toLocaleString('en-IN')}`;
 
 function MapPinIcon({ className = 'h-6 w-6' }) {
@@ -38,11 +49,27 @@ function scrollToId(id) {
 export default function Home() {
   const [plans, setPlans] = useState([]);
   const [settings, setSettings] = useState({});
+  const [leaderboard, setLeaderboard] = useState(null);
+  const [leaderboardError, setLeaderboardError] = useState('');
+  const { user } = useAuth();
 
   useEffect(() => {
     api.get('/plans').then((data) => setPlans(data.plans)).catch(() => {});
     api.get('/settings/public').then((data) => setSettings(data.settings || {})).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setLeaderboard(null);
+      setLeaderboardError('');
+      return undefined;
+    }
+    let active = true;
+    api.get('/features/leaderboard?period=month')
+      .then((data) => { if (active) setLeaderboard(data); })
+      .catch((error) => { if (active) setLeaderboardError(error.message); });
+    return () => { active = false; };
+  }, [user?._id]);
 
   return (
     <main>
@@ -104,20 +131,55 @@ export default function Home() {
             <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full bg-electricblue opacity-20 blur-2xl" />
             <div className="absolute -bottom-8 -left-8 h-40 w-40 rounded-full bg-gymred opacity-20 blur-3xl" />
             <div className="relative overflow-hidden rounded-[2rem] border border-electricblue bg-card p-7 text-white shadow-[0_0_36px_rgb(0_210_255_/_12%)] md:p-9">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold uppercase tracking-[0.2em] text-electricblue">Your next chapter</span>
-                <span className="rounded-full border border-electricblue px-3 py-1 text-xs">01 / START</span>
-              </div>
-              <div className="my-10 flex h-44 items-end gap-3" aria-hidden="true">
-                {[40, 62, 48, 78, 58, 96, 72, 100, 82, 100, 65, 88].map((height, index) => (
-                  <span key={index} className={`flex-1 rounded-t-md ${index > 8 ? 'bg-electricblue' : 'bg-charcoal'}`} style={{ height: `${height}%` }} />
-                ))}
-              </div>
-              <p className="text-3xl font-black leading-tight">Progress is built<br />one rep at a time.</p>
-              <p className="mt-3 text-sm leading-6 text-white">Set a goal. Get moving. Keep coming back for yourself.</p>
-              <Link to="/register" className="mt-7 inline-flex items-center gap-2 font-bold text-gymred hover:text-electricblue">
-                Start your journey <span aria-hidden="true">→</span>
-              </Link>
+              {user ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold uppercase tracking-[0.2em] text-electricblue">Monthly leaderboard</span>
+                    <span className="rounded-full border border-electricblue px-3 py-1 text-xs">THIS MONTH</span>
+                  </div>
+                  {leaderboardError && <p role="alert" className="mt-4 text-sm text-gymred">{leaderboardError}</p>}
+                  <div className="mt-8 space-y-3">
+                    {(leaderboard?.leaderboard || []).slice(0, 3).map((entry) => {
+                      const rankStyle = {
+                        1: 'border-yellow-300 bg-yellow-300/10 text-yellow-200',
+                        2: 'border-slate-300 bg-slate-300/10 text-slate-200',
+                        3: 'border-orange-400 bg-orange-400/10 text-orange-200',
+                      }[entry.rank];
+                      const medal = { 1: '🥇', 2: '🥈', 3: '🥉' }[entry.rank];
+                      return (
+                        <article key={entry.memberId} className={`flex items-center gap-4 rounded-xl border p-3 ${rankStyle}`}>
+                          <span className="text-2xl" aria-label={`Rank ${entry.rank}`}>{medal}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-bold">#{entry.rank} {entry.name}</p>
+                            <p className="text-xs opacity-80">{entry.attendanceCount} attendance days</p>
+                          </div>
+                          <span className="text-xs font-bold uppercase">{entry.rank === 1 ? 'Winner' : `Rank ${entry.rank}`}</span>
+                        </article>
+                      );
+                    })}
+                    {leaderboard && !leaderboard.leaderboard?.length && <p className="rounded-xl border border-electricblue/40 p-4 text-sm text-white/70">No attendance has been recorded this month yet.</p>}
+                    {!leaderboard && !leaderboardError && <p className="py-5 text-sm text-white/60">Loading this month’s leaders…</p>}
+                  </div>
+                  <p className="mt-5 text-xs text-white/60">Ranked by distinct attendance days this month.</p>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold uppercase tracking-[0.2em] text-electricblue">Your next chapter</span>
+                    <span className="rounded-full border border-electricblue px-3 py-1 text-xs">01 / START</span>
+                  </div>
+                  <div className="my-10 flex h-44 items-end gap-3" aria-hidden="true">
+                    {[40, 62, 48, 78, 58, 96, 72, 100, 82, 100, 65, 88].map((height, index) => (
+                      <span key={index} className={`flex-1 rounded-t-md ${index > 8 ? 'bg-electricblue' : 'bg-charcoal'}`} style={{ height: `${height}%` }} />
+                    ))}
+                  </div>
+                  <p className="text-3xl font-black leading-tight">Progress is built<br />one rep at a time.</p>
+                  <p className="mt-3 text-sm leading-6 text-white">Set a goal. Get moving. Keep coming back for yourself.</p>
+                  <Link to="/register" className="mt-7 inline-flex items-center gap-2 font-bold text-gymred hover:text-electricblue">
+                    Start your journey <span aria-hidden="true">→</span>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -157,6 +219,26 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="mx-auto max-w-6xl px-6 py-20">
+        <div className="max-w-2xl">
+          <p className="text-sm font-bold uppercase tracking-[0.2em] text-electricblue">Take a look inside</p>
+          <h2 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">A space to put in the work.</h2>
+          <p className="mt-3 leading-7 text-white/70">Explore the GoGym training floor, equipment, and workout spaces.</p>
+        </div>
+        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {gymPhotos.map((photo) => (
+            <figure key={photo.src} className="group overflow-hidden rounded-2xl border border-electricblue bg-card">
+              <img
+                src={photo.src}
+                alt={photo.alt}
+                loading="lazy"
+                className="h-64 w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+              />
+            </figure>
+          ))}
+        </div>
+      </section>
+
       <section className="border-b border-electricblue">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-14 md:flex-row md:items-center md:justify-between">
           <div>
@@ -190,7 +272,6 @@ export default function Home() {
               const hasOriginal = original > 0;
               const hasOffer = hasOriginal && original > price && price > 0;
               const percentOff = hasOffer ? Math.round(((original - price) / original) * 100) : 0;
-              const savings = hasOffer ? original - price : 0;
 
               return (
                 <article key={plan._id} className="relative rounded-2xl border border-electricblue bg-card p-6 transition hover:-translate-y-1 hover:shadow-[0_0_24px_rgb(0_210_255_/_18%)]">
@@ -202,25 +283,7 @@ export default function Home() {
                   <h3 className="pr-16 text-xl font-bold">{plan.name}</h3>
                   <p className="mt-2 min-h-10 text-sm leading-6 text-white">{plan.description}</p>
 
-                  <div className="mt-6 flex flex-wrap items-end gap-4">
-                    {hasOriginal ? (
-                      <p className="text-sm text-white/70">
-                        <span className="block text-xs">Original price</span>
-                        <span className={`font-semibold ${hasOffer ? 'line-through' : ''}`}>{inr(original)}</span>
-                      </p>
-                    ) : (
-                      <p className="text-xs text-white/60">Original price not set</p>
-                    )}
-                    <p className="text-electricblue">
-                      <span className="block text-xs text-white/70">{hasOffer ? 'Discounted price' : 'Price'}</span>
-                      <span className="text-3xl font-black">{inr(price)}</span>
-                    </p>
-                  </div>
-                  {hasOffer && (
-                    <p className="text-xs font-bold text-gymred">
-                      You save {inr(savings)} · original {inr(original)}
-                    </p>
-                  )}
+                  <PlanPrice original={hasOriginal ? original : 0} price={price} hasOffer={hasOffer} />
                   {!!plan.joiningFeeInPaise && (
                     <p className="text-xs text-white">+ {inr(plan.joiningFeeInPaise)} one-time joining fee</p>
                   )}

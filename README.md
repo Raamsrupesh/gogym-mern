@@ -46,6 +46,19 @@ The frontend runs at `http://localhost:5173`.
 - `server/models/` defines MongoDB data, while `server/services/` contains integrations such as Razorpay and PDF generation.
 - The backend uses native JavaScript ES modules (`import` / `export`).
 
+## Member and trainer features
+- Owner and staff (trainer) workspaces are available at `/admin` and `/trainer`. Members use the member dashboard.
+- Feature APIs are mounted under `/api/features`: attendance history and leaderboard; workout plans and performance; trainer notes; diet guidance; transformations; referrals; equipment; feedback; and in-app notifications.
+- QR generation, QR scanning, and manual check-in have been removed. Existing attendance records and the monthly/weekly leaderboard remain available. No fingerprint-device connection has been added yet; the device/database details are needed before that integration can be implemented.
+- Mark a plan as including diet guidance in Admin → Plans. The entitlement is snapshotted when a membership is created and checked again on the server before diet plans can be read or assigned.
+- Transformation photos are stored in `server/uploads/transformations` and served only through an authenticated, authorization-checked endpoint. Use persistent, private storage and include this directory in backups for production deployments.
+- Automatic membership reminders run daily at 08:30 Asia/Kolkata. Owners can also schedule and delete member reminders from Admin → Reminders; scheduled reminders are sent by email when due. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `MAIL_FROM` for email delivery. Delivery attempts and failures are visible in the admin workspace.
+- When referrals are enabled in Admin → Operations → Referrals, the owner configures separate new-member and referrer discounts. The new member's discount applies to their first successful online membership checkout; after that payment, the referrer receives a credit for their next online membership checkout. Offline payments remain recorded at the amount entered by the owner.
+- The chatbot uses active plans, public business settings, platform feature details, and owner-provided general guidance from Admin → Settings. For a signed-in member, answers about their published trainer notes, workouts, performance, attendance, membership, and referrals are assembled server-side and are not sent to Gemini. Keep personal or confidential information out of owner-provided guidance. Configure `GEMINI_API_KEY` and `GEMINI_MODEL` for general AI answers.
+- Referral claims are disabled by default. Enable them and configure the reward description in Admin → Operations → Referrals.
+- Mongoose creates the new feature collections and indexes as the models are used. Existing attendance records are retained for history and future fingerprint integration.
+- See [FEATURES.md](./FEATURES.md) for the current feature inventory. Update it alongside any feature changes.
+
 ## Contact links
 - Set the gym's WhatsApp number, including its country code, in Admin Settings. The footer uses a demo number until one is configured.
 - Replace the sample LinkedIn, Instagram, and Facebook profile links in `client/src/components/Footer.jsx` with the gym's official social profiles.

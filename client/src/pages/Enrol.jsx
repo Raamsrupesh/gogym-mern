@@ -2,14 +2,18 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
+import PlanPrice from '../components/PlanPrice';
 
 export default function Enrol() {
   const [params] = useSearchParams();
   const planId = params.get('planId');
   const [plan, setPlan] = useState(null);
   const [form, setForm] = useState({ name: '', phone: '', email: '', password: '' });
+  const [referralCode, setReferralCode] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [checkoutTotal, setCheckoutTotal] = useState(null);
+  const [checkoutDiscounts, setCheckoutDiscounts] = useState(null);
   const { user, register, login } = useAuth();
   const nav = useNavigate();
 
@@ -24,7 +28,17 @@ export default function Enrol() {
       if (!user) {
         await register({ name: form.name, phone: form.phone, email: form.email, password: form.password });
       }
-      const { orderId, amount, keyId, currency } = await api.post('/razorpay/order', { planId });
+      if (referralCode.trim()) {
+        await api.post('/features/referrals/use', { code: referralCode.trim() });
+        setReferralCode('');
+      }
+      const order = await api.post('/razorpay/order', { planId });
+      const { orderId, amount, keyId, currency } = order;
+      setCheckoutTotal(amount);
+      setCheckoutDiscounts({
+        newMember: order.referralDiscountInPaise || 0,
+        referrer: order.referrerDiscountInPaise || 0,
+      });
       if (!window.Razorpay) {
         await new Promise((r) => { const s = document.createElement('script'); s.src = 'https://checkout.razorpay.com/v1/checkout.js'; s.onload = r; document.body.appendChild(s); });
       }
@@ -41,9 +55,18 @@ export default function Enrol() {
             nav('/dashboard');
           } catch (e) { setErr(e.message); }
         },
+        modal: {
+          ondismiss: () => {
+            api.post('/razorpay/fail', { orderId }).catch((error) => setErr(error.message));
+          },
+        },
         theme: { color: '#FF3B30' },
       });
-      rzp.on('payment.failed', (r) => setErr(r.error?.description || 'Payment failed'));
+      rzp.on('payment.failed', (r) => {
+        const failedOrderId = r.error?.metadata?.order_id;
+        if (failedOrderId) api.post('/razorpay/fail', { orderId: failedOrderId }).catch((error) => setErr(error.message));
+        setErr(r.error?.description || 'Payment failed');
+      });
       rzp.open();
     } catch (e) { setErr(e.message); }
     finally { setBusy(false); }
@@ -58,20 +81,13 @@ export default function Enrol() {
   return (
     <main className="mx-auto max-w-xl px-6 py-16">
       <h1 className="text-3xl font-black">Enrol — {plan.name}</h1>
-      <div className="mt-2 flex flex-wrap items-baseline gap-x-2 text-white">
-        {hasOffer && (
-          <span className="text-sm text-white/70">
-            Original <span className="line-through">₹{(originalPrice / 100).toLocaleString('en-IN')}</span>
-            {' · '}
-          </span>
-        )}
-        <span className="font-bold text-electricblue">
-          {hasOffer ? 'Discounted price' : 'Price'}: ₹{(plan.priceInPaise / 100).toLocaleString('en-IN')}
-        </span>
-        {(plan.joiningFeeInPaise || 0) > 0 && (
-          <span>+ ₹{(plan.joiningFeeInPaise / 100).toLocaleString('en-IN')} joining fee</span>
-        )}
-        <span>· {plan.durationDays} days · Total ₹{(total / 100).toLocaleString('en-IN')}</span>
+      <div className="mt-4">
+        <PlanPrice original={originalPrice} price={plan.priceInPaise} hasOffer={hasOffer} />
+        <p className="mt-2 text-sm text-white">
+          {plan.durationDays} days
+          {(plan.joiningFeeInPaise || 0) > 0 && ` · ₹${(plan.joiningFeeInPaise / 100).toLocaleString('en-IN')} joining fee`}
+          {' · '}Total ₹{(total / 100).toLocaleString('en-IN')}
+        </p>
       </div>
       <form onSubmit={pay} className="mt-8 space-y-3 rounded-2xl border border-electricblue bg-card p-6">
         {!user && (
@@ -82,8 +98,20 @@ export default function Enrol() {
             <input required type="password" minLength={8} placeholder="Password (8+ chars)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full rounded-lg bg-card px-3 py-2 outline-none" />
           </>
         )}
+        <label className="block text-sm">
+          Referral code (optional)
+          <input value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} className="mt-1 w-full rounded-lg bg-card px-3 py-2 outline-none" placeholder="Enter a member's code" />
+        </label>
+        <p className="text-xs text-white/60">Eligible referral discounts and rewards are applied automatically during checkout.</p>
+        {checkoutTotal !== null && (
+          <div className="rounded-lg border border-electricblue/40 p-3 text-sm">
+            {checkoutDiscounts?.newMember > 0 && <p>New-member referral discount: ₹{(checkoutDiscounts.newMember / 100).toLocaleString('en-IN')}</p>}
+            {checkoutDiscounts?.referrer > 0 && <p>Referral credit applied: ₹{(checkoutDiscounts.referrer / 100).toLocaleString('en-IN')}</p>}
+            <p className="font-bold">Checkout total: ₹{(checkoutTotal / 100).toLocaleString('en-IN')}</p>
+          </div>
+        )}
         <button disabled={busy} className="w-full rounded-full bg-gymred px-6 py-3 font-bold text-white disabled:opacity-50">
-          {busy ? 'Please wait…' : `Pay ₹${(total / 100).toLocaleString('en-IN')}`}
+          {busy ? 'Please wait…' : `Pay ₹${((checkoutTotal ?? total) / 100).toLocaleString('en-IN')}`}
         </button>
         {err && <p className="text-gymred text-sm">{err}</p>}
         <p className="text-xs text-white">

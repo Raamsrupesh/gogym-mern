@@ -1,39 +1,21 @@
 import Attendance from '../models/Attendance.js';
-import Membership from '../models/Membership.js';
 
-async function checkInMember(req, res, next) {
-  try {
-    const { memberId } = req.body;
-    const activeMembership = await Membership.findOne({
-      member: memberId,
-      status: 'active',
-      expiryDate: { $gt: new Date() },
-    });
-    if (!activeMembership) return res.status(400).json({ error: 'No valid membership' });
-
-    const attendance = await Attendance.create({
-      member: memberId,
-      membership: activeMembership._id,
-      method: 'manual',
-      staff: req.user.sub,
-    });
-    res.status(201).json({ attendance });
-  } catch (error) {
-    next(error);
-  }
-}
+const dayKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(date);
 
 async function listDailyAttendance(req, res, next) {
   try {
     const { date } = req.query;
-    const selectedDay = date ? new Date(date) : new Date();
-    const startOfDay = new Date(selectedDay);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(selectedDay);
-    endOfDay.setHours(23, 59, 59, 999);
+    const key = date || dayKey();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return res.status(400).json({ error: 'Date must use YYYY-MM-DD' });
+    const next = new Date(`${key}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    const startOfDay = new Date(`${key}T00:00:00+05:30`);
+    const endOfDay = new Date(`${next.toISOString().slice(0, 10)}T00:00:00+05:30`);
 
     const attendance = await Attendance.find({
-      checkedInAt: { $gte: startOfDay, $lte: endOfDay },
+      checkedInAt: { $gte: startOfDay, $lt: endOfDay },
     })
       .populate('member', 'name email phone')
       .sort({ checkedInAt: -1 });
@@ -43,4 +25,4 @@ async function listDailyAttendance(req, res, next) {
   }
 }
 
-export { checkInMember, listDailyAttendance };
+export { listDailyAttendance };

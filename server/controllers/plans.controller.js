@@ -29,6 +29,7 @@ async function createPlan(req, res, next) {
       joiningFeeInPaise,
       durationDays,
       benefits,
+      dietGuidance = false,
       active,
       order,
     } = req.body;
@@ -50,6 +51,7 @@ async function createPlan(req, res, next) {
       joiningFeeInPaise: joiningFeeInPaise || 0,
       durationDays,
       benefits: benefits || [],
+      dietGuidance: dietGuidance === true,
       active: active !== false,
       order: order || 0,
     });
@@ -62,10 +64,25 @@ async function createPlan(req, res, next) {
 
 async function updatePlan(req, res, next) {
   try {
-    const changes = { ...req.body };
-    delete changes._id;
+    const fields = [
+      'name', 'description', 'priceInPaise', 'originalPriceInPaise',
+      'joiningFeeInPaise', 'durationDays', 'benefits', 'dietGuidance',
+      'active', 'order',
+    ];
+    const changes = Object.fromEntries(fields
+      .filter((field) => req.body[field] !== undefined)
+      .map((field) => [field, req.body[field]]));
+    if (changes.dietGuidance !== undefined && typeof changes.dietGuidance !== 'boolean') {
+      return res.status(400).json({ error: 'dietGuidance must be a boolean' });
+    }
+    if (changes.priceInPaise !== undefined && (!Number.isInteger(changes.priceInPaise) || changes.priceInPaise < 0)) {
+      return res.status(400).json({ error: 'Invalid plan price' });
+    }
+    if (changes.originalPriceInPaise !== undefined && (!Number.isInteger(changes.originalPriceInPaise) || changes.originalPriceInPaise < 0)) {
+      return res.status(400).json({ error: 'Invalid original price' });
+    }
 
-    const plan = await Plan.findByIdAndUpdate(req.params.id, changes, { new: true });
+    const plan = await Plan.findByIdAndUpdate(req.params.id, changes, { new: true, runValidators: true });
     if (!plan) return res.status(404).json({ error: 'Not found' });
 
     await AuditLog.create({

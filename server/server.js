@@ -18,6 +18,7 @@ import reminderRoutes from './routes/reminders.routes.js';
 import chatbotRoutes from './routes/chatbot.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import featureRoutes from './routes/features.routes.js';
 import { start as startReminderJob } from './jobs/reminders.js';
 
 const app = express();
@@ -40,6 +41,7 @@ app.use('/api/reminders', reminderRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/features', featureRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 app.use(errorHandler);

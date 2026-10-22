@@ -5,6 +5,7 @@ import Plan from '../models/Plan.js';
 import Lead from '../models/Lead.js';
 import Attendance from '../models/Attendance.js';
 import AuditLog from '../models/AuditLog.js';
+import Equipment from '../models/Equipment.js';
 
 export async function getAdminOverview(_req, res, next) {
   try {
@@ -23,6 +24,7 @@ export async function getAdminOverview(_req, res, next) {
       monthPayments,
       todayAttendanceCount,
       recentPayments,
+      equipmentMaintenance,
     ] = await Promise.all([
       User.countDocuments({ role: 'member' }),
       Membership.countDocuments({ status: 'active', expiryDate: { $gt: now } }),
@@ -44,6 +46,15 @@ export async function getAdminOverview(_req, res, next) {
         .sort({ paidAt: -1 })
         .limit(10)
         .populate('member', 'name'),
+      Equipment.find({
+        archivedAt: null,
+        $or: [
+          { status: 'needs_maintenance' },
+          { status: 'under_repair' },
+          { status: 'out_of_service' },
+          { nextMaintenanceAt: { $lte: now } },
+        ],
+      }).select('name status nextMaintenanceAt').sort({ nextMaintenanceAt: 1 }).limit(20),
     ]);
 
     res.status(200).json({
@@ -57,6 +68,7 @@ export async function getAdminOverview(_req, res, next) {
         attendanceToday: todayAttendanceCount,
       },
       recentPayments,
+      equipmentMaintenance,
     });
   } catch (error) {
     next(error);

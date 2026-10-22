@@ -9,6 +9,13 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['owner', 'staff', 'member'], default: 'member', index: true },
   status: { type: String, enum: ['active', 'disabled'], default: 'active' },
   consentMarketing: { type: Boolean, default: false },
+  referralCode: { type: String, uppercase: true, unique: true, sparse: true },
+  referralDiscountBalanceInPaise: { type: Number, default: 0, min: 0 },
+  referralRewardedIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Referral' }],
+  referralDiscountReservation: {
+    payment: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment' },
+    amountInPaise: { type: Number, default: 0 },
+  },
 }, { timestamps: true });
 
 userSchema.methods.setPassword = async function (pw) {
@@ -19,6 +26,9 @@ userSchema.methods.verifyPassword = function (pw) {
 };
 userSchema.methods.toSafe = function () {
   const { passwordHash, __v, ...rest } = this.toObject();
+  delete rest.referralRewardedIds;
+  delete rest.referralDiscountBalanceInPaise;
+  delete rest.referralDiscountReservation;
   return rest;
 };
 export default mongoose.model('User', userSchema);

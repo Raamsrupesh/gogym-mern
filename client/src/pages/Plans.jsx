@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import PlanPrice from '../components/PlanPrice';
 
 const inr = (paise) => `₹${(Number(paise || 0) / 100).toLocaleString('en-IN')}`;
 
@@ -19,7 +20,6 @@ export default function Plans() {
           const hasOriginal = original > 0;
           const hasOffer = hasOriginal && original > price && price > 0;
           const percentOff = hasOffer ? Math.round(((original - price) / original) * 100) : 0;
-          const savings = hasOffer ? original - price : 0;
 
           return (
             <article key={p._id} className="relative rounded-2xl border border-electricblue bg-card p-6">
@@ -35,25 +35,7 @@ export default function Plans() {
                 {(p.benefits || []).map((b) => <li key={b}>· {b}</li>)}
               </ul>
 
-              <div className="mt-6 flex flex-wrap items-end gap-4">
-                {hasOriginal ? (
-                  <p className="text-sm text-white/70">
-                    <span className="block text-xs">Original price</span>
-                    <span className={`font-semibold ${hasOffer ? 'line-through' : ''}`}>{inr(original)}</span>
-                  </p>
-                ) : (
-                  <p className="text-xs text-white/60">Original price not set</p>
-                )}
-                <p className="text-electricblue">
-                  <span className="block text-xs text-white/70">{hasOffer ? 'Discounted price' : 'Price'}</span>
-                  <span className="text-3xl font-black">{inr(price)}</span>
-                </p>
-              </div>
-              {hasOffer && (
-                <p className="text-xs font-bold text-gymred">
-                  You save {inr(savings)} · original {inr(original)}
-                </p>
-              )}
+              <PlanPrice original={original} price={price} hasOffer={hasOffer} />
               {!!p.joiningFeeInPaise && (
                 <p className="text-xs text-white">+ {inr(p.joiningFeeInPaise)} one-time joining fee</p>
               )}

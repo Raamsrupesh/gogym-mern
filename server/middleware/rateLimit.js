@@ -18,3 +18,4 @@ const makeLimiter = (windowMs, max, prefix) =>
 export const publicLimiter = makeLimiter(60_000, 60, 'rl:pub:');
 export const authLimiter = makeLimiter(10 * 60_000, 10, 'rl:auth:');
 export const chatbotLimiter = makeLimiter(60_000, 15, 'rl:bot:');
+export const uploadLimiter = makeLimiter(10 * 60_000, 10, 'rl:upload:');

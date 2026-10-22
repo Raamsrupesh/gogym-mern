@@ -2,14 +2,19 @@
 import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import BrandLogo from './BrandLogo';
 
 const SERVICES = [
-  'HIIT',
-  'Strength Training',
-  'Fat Loss',
-  'Personal Training',
-  'Cardio & Conditioning',
-  'Functional Fitness',
+  'Personal training sessions',
+  'Hiit Workouts',
+  'weight loss program',
+  'Weight gain program',
+  'Muscle Building program',
+  'Belly Fat Training',
+  'zero size Program',
+  'Cardio Training',
+  'Strenght training',
+  'Gait Training For Brain Stroke People'
 ];
 
 function scrollToId(id) {
@@ -35,8 +40,8 @@ export default function Nav() {
   return (
     <nav className="sticky top-0 z-30 border-b border-electricblue bg-card backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-        <Link to="/" aria-label="Go Gym home" className="shrink-0 whitespace-nowrap font-techno text-xl font-black italic tracking-tight sm:text-2xl">
-          Go <span className="text-gymred">Gym</span>
+        <Link to="/" aria-label="GoGym home" className="shrink-0">
+          <BrandLogo />
         </Link>
         <div className="flex min-w-0 items-center gap-2 text-xs sm:gap-5 sm:text-sm">
           <div
@@ -72,8 +77,10 @@ export default function Nav() {
               </div>
             )}
           </div>
-          {user?.role === 'owner' || user?.role === 'staff'
+          {user?.role === 'owner'
             ? <NavLink to="/admin" className={({ isActive }) => `hidden whitespace-nowrap transition-colors hover:text-electricblue sm:inline ${isActive ? 'font-bold text-gymred' : ''}`}>Admin</NavLink>
+            : user?.role === 'staff'
+              ? <NavLink to="/trainer" className={({ isActive }) => `hidden whitespace-nowrap transition-colors hover:text-electricblue sm:inline ${isActive ? 'font-bold text-gymred' : ''}`}>Trainer workspace</NavLink>
             : user && <NavLink to="/dashboard" className={({ isActive }) => `hidden whitespace-nowrap transition-colors hover:text-electricblue sm:inline ${isActive ? 'font-bold text-gymred' : ''}`}>My membership</NavLink>}
           {user ? (
             <button onClick={() => { logout(); nav('/'); }} className="whitespace-nowrap rounded-full border border-electricblue px-3 py-1.5 transition hover:bg-electricblue hover:text-charcoal sm:px-4">Logout</button>

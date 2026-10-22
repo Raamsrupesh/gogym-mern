@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
+import FeatureWorkspace from '../components/FeatureWorkspace';
 
 export default function MemberDashboard() {
   const { user } = useAuth();
@@ -31,6 +32,8 @@ export default function MemberDashboard() {
           <p className="mt-2 text-white">No active membership.</p>
         )}
       </section>
+
+      <FeatureWorkspace mode="member" />
 
       <section className="mt-8 rounded-2xl border border-electricblue bg-card p-6">
         <h2 className="text-xl font-bold">Payments</h2>
