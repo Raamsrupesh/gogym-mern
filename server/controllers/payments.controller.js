@@ -5,6 +5,7 @@ import User from '../models/User.js';
 import Counter from '../models/Counter.js';
 import AuditLog from '../models/AuditLog.js';
 import { completeReferralForMember } from '../services/referrals.service.js';
+import { snapshotPlanFeatures } from '../services/membershipEntitlements.js';
 
 async function searchPayments(req, res, next) {
   try {
@@ -32,23 +33,23 @@ async function recordOfflinePayment(req, res, next) {
       return res.status(400).json({ error: 'Invalid input' });
     }
 
-    const plan = await Plan.findById(planId);
-    const member = await User.findById(memberId);
+    const plan = await Plan.findOne({ _id: planId, active: true });
+    const member = await User.findOne({ _id: memberId, role: 'member', status: 'active' });
     if (!plan || !member) return res.status(404).json({ error: 'Not found' });
+    let assignedTrainer;
+    if (req.body.assignedTrainer) {
+      if (req.user.role !== 'owner') return res.status(403).json({ error: 'Only the owner can assign a trainer' });
+      assignedTrainer = await User.findOne({ _id: req.body.assignedTrainer, role: 'staff', status: 'active' });
+      if (!assignedTrainer) return res.status(400).json({ error: 'Choose an active trainer' });
+    }
 
     const now = new Date();
     const expiryDate = new Date(now.getTime() + plan.durationDays * 86400000);
     const membership = await Membership.create({
       member,
       plan: plan._id,
-      planSnapshot: {
-        name: plan.name,
-        priceInPaise: plan.priceInPaise,
-        durationDays: plan.durationDays,
-        joiningFeeInPaise: plan.joiningFeeInPaise,
-        benefits: plan.benefits,
-        dietGuidance: plan.dietGuidance,
-      },
+      assignedTrainer: assignedTrainer?._id,
+      planSnapshot: snapshotPlanFeatures(plan),
       startDate: now,
       expiryDate,
       status: 'active',

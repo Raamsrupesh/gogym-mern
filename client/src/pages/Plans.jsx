@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import PlanPrice from '../components/PlanPrice';
+import { getPlanBenefits, getPlanFeatureLabels } from '../data/planFeatures';
 
 const inr = (paise) => `₹${(Number(paise || 0) / 100).toLocaleString('en-IN')}`;
 
@@ -13,8 +14,11 @@ export default function Plans() {
   return (
     <main className="mx-auto max-w-6xl px-6 py-16">
       <h1 className="mb-8 text-4xl font-black">All plans</h1>
-      <div className="grid gap-6 md:grid-cols-3">
+      <section aria-labelledby="basic-plans">
+        <h2 id="basic-plans" className="mb-4 text-2xl font-black">Basic membership</h2>
+        <div className="grid gap-6 md:grid-cols-3">
         {plans.map((p) => {
+          if ((p.category || 'basic') !== 'basic') return null;
           const original = Number(p.originalPriceInPaise || 0);
           const price = Number(p.priceInPaise || 0);
           const hasOriginal = original > 0;
@@ -22,9 +26,9 @@ export default function Plans() {
           const percentOff = hasOffer ? Math.round(((original - price) / original) * 100) : 0;
 
           return (
-            <article key={p._id} className="relative rounded-2xl border border-electricblue bg-card p-6">
+            <article key={p._id} className="relative rounded-2xl border border-brand bg-card p-6">
               {hasOffer && (
-                <span className="absolute right-4 top-4 rounded-full bg-gymred px-2.5 py-1 text-xs font-black text-white">
+                <span className="absolute right-4 top-4 rounded-full bg-brand px-2.5 py-1 text-xs font-black text-white">
                   {percentOff}% OFF
                 </span>
               )}
@@ -32,7 +36,8 @@ export default function Plans() {
               <h3 className="text-xl font-bold">{p.name}</h3>
               <p className="mt-1 text-sm text-white">{p.description}</p>
               <ul className="mt-4 space-y-1 text-sm text-white">
-                {(p.benefits || []).map((b) => <li key={b}>· {b}</li>)}
+                {getPlanFeatureLabels(p.features).map((feature) => <li key={feature}>· {feature}</li>)}
+                {getPlanBenefits(p.benefits).map((benefit) => <li key={benefit}>· {benefit}</li>)}
               </ul>
 
               <PlanPrice original={original} price={price} hasOffer={hasOffer} />
@@ -42,13 +47,41 @@ export default function Plans() {
               <p className="text-sm text-white">{p.durationDays} days</p>
 
               <Link to={`/enrol?planId=${p._id}`}
-                className="mt-4 block rounded-full bg-gymred px-4 py-2 text-center font-bold text-white">
+                className="mt-4 block rounded-full bg-brand px-4 py-2 text-center font-bold text-white">
                 Choose plan
               </Link>
             </article>
           );
         })}
-      </div>
+        </div>
+      </section>
+      <section aria-labelledby="professional-plans" className="mt-12">
+        <h2 id="professional-plans" className="mb-4 text-2xl font-black">Professional training</h2>
+        <div className="grid gap-6 md:grid-cols-3">
+        {plans.map((p) => {
+          if (p.category !== 'professional') return null;
+          const original = Number(p.originalPriceInPaise || 0);
+          const price = Number(p.priceInPaise || 0);
+          const hasOriginal = original > 0;
+          const hasOffer = hasOriginal && original > price && price > 0;
+          const percentOff = hasOffer ? Math.round(((original - price) / original) * 100) : 0;
+          return (
+            <article key={p._id} className="relative rounded-2xl border border-brand bg-card p-6">
+              {hasOffer && <span className="absolute right-4 top-4 rounded-full bg-brand px-2.5 py-1 text-xs font-black text-white">{percentOff}% OFF</span>}
+              <h3 className="text-xl font-bold">{p.name}</h3>
+              <p className="mt-1 text-sm text-white">{p.description}</p>
+              <ul className="mt-4 space-y-1 text-sm text-white">
+                {getPlanFeatureLabels(p.features).map((feature) => <li key={feature}>· {feature}</li>)}
+                {getPlanBenefits(p.benefits).map((benefit) => <li key={benefit}>· {benefit}</li>)}
+              </ul>
+              <PlanPrice original={original} price={price} hasOffer={hasOffer} />
+              <p className="text-sm text-white">{p.durationDays} days</p>
+              <Link to={`/enrol?planId=${p._id}`} className="mt-4 block rounded-full bg-brand px-4 py-2 text-center font-bold text-white">Choose plan</Link>
+            </article>
+          );
+        })}
+        </div>
+      </section>
     </main>
   );
 }

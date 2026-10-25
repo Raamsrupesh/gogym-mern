@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 const workoutPerformanceSchema = new mongoose.Schema({
   member: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   exercise: { type: String, required: true, trim: true, maxlength: 120 },
+  equipment: { type: String, trim: true, maxlength: 120 },
+  equipmentKey: { type: String, trim: true, lowercase: true },
+  weekOf: { type: Date, index: true },
   performedAt: { type: Date, required: true, default: Date.now, index: true },
   weight: { type: Number, min: 0 },
   sets: { type: Number, required: true, min: 1 },
@@ -12,4 +15,8 @@ const workoutPerformanceSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 workoutPerformanceSchema.index({ member: 1, exercise: 1, performedAt: 1 });
+workoutPerformanceSchema.index(
+  { member: 1, equipmentKey: 1, weekOf: 1 },
+  { unique: true, partialFilterExpression: { equipmentKey: { $type: 'string' }, weekOf: { $type: 'date' } } }
+);
 export default mongoose.model('WorkoutPerformance', workoutPerformanceSchema);

@@ -14,8 +14,13 @@ const exerciseSchema = new mongoose.Schema({
 const workoutPlanSchema = new mongoose.Schema({
   member: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  serviceId: { type: String, trim: true },
   title: { type: String, required: true, trim: true, maxlength: 120 },
   description: { type: String, trim: true, maxlength: 2000 },
+  fitnessGoal: { type: String, trim: true, maxlength: 500 },
+  schedule: { type: String, trim: true, maxlength: 1000 },
+  trainerNotes: { type: String, trim: true, maxlength: 2000 },
+  assignedAt: { type: Date, default: Date.now },
   exercises: { type: [exerciseSchema], validate: (items) => items.length > 0 },
   status: { type: String, enum: ['draft', 'published', 'archived'], default: 'draft', index: true },
 }, { timestamps: true });

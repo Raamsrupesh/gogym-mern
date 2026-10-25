@@ -47,7 +47,7 @@ export default function Footer() {
   const developerWhatsappDigits = DEVELOPER.whatsapp.replace(/\D/g, '');
 
   return (
-    <footer className="border-t border-electricblue bg-card text-white">
+    <footer className="border-t border-brand bg-card text-white">
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-6 py-12 md:grid-cols-[1.4fr_1fr_1fr]">
         <div>
           <Link to="/" aria-label="GoGym home" className="inline-flex">
@@ -57,7 +57,7 @@ export default function Footer() {
             {settings.businessName || 'GoGym'} · Make your next move a strong one.
           </p>
           <h2 className="flex items-center gap-2 font-bold">
-          {/* <span className="h-2 w-2 rounded-full bg-electricblue" /> */}
+          {/* <span className="h-2 w-2 rounded-full bg-brand" /> */}
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="16"
@@ -76,16 +76,16 @@ export default function Footer() {
         </p>
 {settings.phone && <a className="mt-2 inline-block text-sm text-white hover:text-white" href={`tel:${settings.phone}`}>{settings.phone}</a>}
 
-          <a href='https://www.linkedin.com/in/rupeshyerra/' target="_blank" className="inline-flex shrink-0 items-center justify-center rounded-full bg-gymred px-7 py-3.5 font-bold text-white transition hover:shadow-[0_0_20px_#00D2FF] mt-3"> MEET THE DEVELOPER <span className="ml-2" aria-hidden="true"> → </span></a>
+          <a href='https://www.linkedin.com/in/rupeshyerra/' target="_blank" className="inline-flex shrink-0 items-center justify-center rounded-full bg-brand px-7 py-3.5 font-bold text-white transition hover:shadow-[0_0_20px_#F05423] mt-3"> MEET THE DEVELOPER <span className="ml-2" aria-hidden="true"> → </span></a>
         </div>
 
         <div>
           <h2 className="font-bold">Explore</h2>
           <div className="mt-4 flex flex-col items-start gap-3 text-sm text-white">
-            <Link to="/plans" className="transition-colors hover:text-electricblue">Membership plans</Link>
-            <Link to="/register" className="transition-colors hover:text-electricblue">Create an account</Link>
-            <Link to="/login" className="transition-colors hover:text-electricblue">Member sign in</Link>
-            {settings.email && <a href={`mailto:${settings.email}`} className="transition-colors hover:text-electricblue">{settings.email}</a>}
+            <Link to="/plans" className="transition-colors hover:text-brand">Membership plans</Link>
+            <Link to="/register" className="transition-colors hover:text-brand">Create an account</Link>
+            <Link to="/login" className="transition-colors hover:text-brand">Member sign in</Link>
+            {settings.email && <a href={`mailto:${settings.email}`} className="transition-colors hover:text-brand">{settings.email}</a>}
           </div>
         </div>
 
@@ -96,7 +96,7 @@ export default function Footer() {
             href={whatsappUrl}
             target="_blank"
             rel="noreferrer"
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-gymred px-5 py-2.5 text-sm font-bold text-white transition hover:shadow-[0_0_18px_#00D2FF]"
+            className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition hover:shadow-[0_0_18px_#F05423]"
           >
             <SocialIcon name="whatsapp" />
             Chat with us
@@ -113,7 +113,7 @@ export default function Footer() {
                   rel="noreferrer"
                   aria-label={social.icon === 'whatsapp' ? 'Chat with GoGym on WhatsApp' : `GoGym on ${social.name}`}
                   title={social.name}
-                  className="rounded-full border border-electricblue p-2.5 text-white transition hover:bg-electricblue hover:text-charcoal"
+                  className="rounded-full border border-brand p-2.5 text-white transition hover:bg-brand hover:text-charcoal"
                 >
                   <SocialIcon name={social.icon} />
                 </a>
@@ -123,7 +123,7 @@ export default function Footer() {
           {/* <p className="mt-2 text-xs text-white">Replace the social links with your gym’s official profiles.</p> */}
         </div>
       </div>
-      <div className="border-t border-electricblue">
+      <div className="border-t border-brand">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-4 text-xs text-white sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} {settings.businessName || 'GoGym'}. All rights reserved.</p>
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -133,7 +133,7 @@ export default function Footer() {
               target="_blank"
               rel="noreferrer"
               aria-label={`Meet the developer, ${DEVELOPER.name}, on LinkedIn`}
-              className="font-semibold text-white underline-offset-2 transition-colors hover:text-electricblue hover:underline"
+              className="font-semibold text-white underline-offset-2 transition-colors hover:text-brand hover:underline"
             >
               Meet the developer
             </a>
@@ -143,7 +143,7 @@ export default function Footer() {
               target="_blank"
               rel="noreferrer"
               aria-label={`WhatsApp the developer at ${DEVELOPER.whatsapp}`}
-              className="inline-flex items-center gap-1 font-semibold text-white underline-offset-2 transition-colors hover:text-electricblue hover:underline"
+              className="inline-flex items-center gap-1 font-semibold text-white underline-offset-2 transition-colors hover:text-brand hover:underline"
             >
               <SocialIcon name="whatsapp" />
               {DEVELOPER.whatsapp}

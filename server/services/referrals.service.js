@@ -31,7 +31,7 @@ export async function createReferralClaim(referredId, rawCode) {
       referred: referredId,
       code,
       reward: config.referralReward,
-      newMemberDiscountInPaise: config.newMemberDiscountInPaise || 0,
+      newMemberDiscountPercent: config.newMemberDiscountPercent || 0,
       referrerDiscountInPaise: config.referrerDiscountInPaise || 0,
     });
   } catch (error) {

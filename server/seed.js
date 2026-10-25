@@ -3,6 +3,7 @@ import { connectDB } from './config/db.js';
 import User from './models/User.js';
 import Settings from './models/Settings.js';
 import Plan from './models/Plan.js';
+import { defaultPlans } from './data/defaultPlans.js';
 
 (async () => {
   await connectDB();
@@ -27,12 +28,8 @@ import Plan from './models/Plan.js';
   );
 
   if ((await Plan.countDocuments()) === 0) {
-    await Plan.create({
-      name: 'Monthly', description: 'Full gym access, 30 days', priceInPaise: 150000,
-      durationDays: 30, joiningFeeInPaise: 0, active: true, order: 1,
-      benefits: ['Full equipment access', 'Locker'],
-    });
-    console.log('Seeded one sample plan — replace with real plans in the owner dashboard.');
+    await Plan.insertMany(defaultPlans.map((plan) => ({ ...plan, active: true })));
+    console.log('Seeded the default basic and professional membership plans.');
   }
   process.exit(0);
 })();

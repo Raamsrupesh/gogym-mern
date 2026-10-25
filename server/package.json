@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "seed:plans": "node scripts/seed-default-plans.js"
   },
   "dependencies": {
     "@google/genai": "^2.30.0",

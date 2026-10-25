@@ -16,8 +16,14 @@ async function call(path, { method = 'GET', body, raw } = {}) {
     if (refreshed) return call(path, { method, body, raw });
   }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Request failed' }));
-    throw new Error(err.error || 'Request failed');
+    const responseBody = await res.text();
+    let message;
+    try {
+      message = JSON.parse(responseBody).error;
+    } catch {
+      if (responseBody && !responseBody.trimStart().startsWith('<')) message = responseBody;
+    }
+    throw new Error(message || `Request failed (${res.status}${res.statusText ? ` ${res.statusText}` : ''})`);
   }
   const ct = res.headers.get('content-type') || '';
   return ct.includes('application/json') ? res.json() : res;
@@ -39,6 +45,7 @@ export const api = {
   put: (p, body) => call(p, { method: 'PUT', body }),
   patch: (p, body) => call(p, { method: 'PATCH', body }),
   postRaw: (p, body) => call(p, { method: 'POST', body, raw: true }),
+  patchRaw: (p, body) => call(p, { method: 'PATCH', body, raw: true }),
   delete: (path) => call(path, { method: 'DELETE' }),
   invoice: async (id) => {
     const res = await fetch(`${API}/invoices/${id}`, { headers: { Authorization: `Bearer ${accessToken}` } });

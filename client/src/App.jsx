@@ -16,7 +16,8 @@ function Protected({ children, role }) {
   const { user, ready } = useAuth();
   if (!ready) return <p className="p-8 text-white">Loading…</p>;
   if (!user) return <Navigate to="/login" replace />;
-  if (role && user.role !== role && user.role !== 'owner') return <Navigate to="/dashboard" replace />;
+  const home = user.role === 'owner' ? '/admin' : user.role === 'staff' ? '/trainer' : '/dashboard';
+  if (role ? user.role !== role : user.role !== 'member') return <Navigate to={home} replace />;
   return children;
 }
 

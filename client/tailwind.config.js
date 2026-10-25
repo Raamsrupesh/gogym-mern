@@ -5,8 +5,7 @@ export default {
       colors: {
         charcoal: '#0D1117',
         card: '#1C1F26',
-        gymred: '#FF3B30',
-        electricblue: '#00D2FF',
+        brand: '#F05423',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

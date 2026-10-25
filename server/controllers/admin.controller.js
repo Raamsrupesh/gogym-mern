@@ -2,7 +2,6 @@ import User from '../models/User.js';
 import Membership from '../models/Membership.js';
 import Payment from '../models/Payment.js';
 import Plan from '../models/Plan.js';
-import Lead from '../models/Lead.js';
 import Attendance from '../models/Attendance.js';
 import AuditLog from '../models/AuditLog.js';
 import Equipment from '../models/Equipment.js';
@@ -19,7 +18,6 @@ export async function getAdminOverview(_req, res, next) {
       memberCount,
       activeMembershipCount,
       expiringMembershipCount,
-      newLeadCount,
       todayPayments,
       monthPayments,
       todayAttendanceCount,
@@ -32,7 +30,6 @@ export async function getAdminOverview(_req, res, next) {
         status: 'active',
         expiryDate: { $gte: now, $lte: sevenDaysFromNow },
       }),
-      Lead.countDocuments({ status: 'new' }),
       Payment.aggregate([
         { $match: { status: 'captured', paidAt: { $gte: startOfToday } } },
         { $group: { _id: null, sum: { $sum: '$amountInPaise' } } },
@@ -62,7 +59,6 @@ export async function getAdminOverview(_req, res, next) {
         members: memberCount,
         activeMemberships: activeMembershipCount,
         expiringIn7Days: expiringMembershipCount,
-        newLeads: newLeadCount,
         collectedTodayPaise: todayPayments[0]?.sum || 0,
         collectedMonthPaise: monthPayments[0]?.sum || 0,
         attendanceToday: todayAttendanceCount,
@@ -98,9 +94,19 @@ export async function createStaffAccount(req, res, next) {
 
 export async function deletePlan(req, res, next) {
   try {
-    const plan = await Plan.findByIdAndDelete(req.params.id);
+    const plan = await Plan.findById(req.params.id);
     if (!plan) return res.status(404).json({ error: 'Plan not found' });
-    res.json({ ok: true });
+    const [hasMemberships, hasPayments] = await Promise.all([
+      Membership.exists({ plan: plan._id }),
+      Payment.exists({ plan: plan._id }),
+    ]);
+    if (hasMemberships || hasPayments) {
+      plan.active = false;
+      await plan.save();
+      return res.json({ ok: true, archived: true });
+    }
+    await plan.deleteOne();
+    res.json({ ok: true, archived: false });
   } catch (error) {
     next(error);
   }

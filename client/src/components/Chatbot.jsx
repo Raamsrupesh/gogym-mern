@@ -35,13 +35,13 @@ function Robot({ className = 'h-10 w-10', waving = false }) {
   return (
     <svg viewBox="0 0 64 64" className={className} aria-hidden="true">
       {/* antenna */}
-      <g className={waving ? 'text-gymred animate-pulse' : 'text-gymred'} fill="currentColor">
+      <g className={waving ? 'text-brand animate-pulse' : 'text-brand'} fill="currentColor">
         <circle cx="32" cy="6" r="3" />
       </g>
-      <line x1="32" y1="9" x2="32" y2="14" className="text-electricblue" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <line x1="32" y1="9" x2="32" y2="14" className="text-brand" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
 
       {/* head */}
-      <g className="text-electricblue" fill="currentColor">
+      <g className="text-brand" fill="currentColor">
         <rect x="12" y="14" width="40" height="26" rx="9" />
       </g>
 
@@ -62,16 +62,16 @@ function Robot({ className = 'h-10 w-10', waving = false }) {
       />
 
       {/* body + left arm */}
-      <g className="text-gymred" fill="currentColor">
+      <g className="text-brand" fill="currentColor">
         <rect x="20" y="42" width="24" height="15" rx="5" />
         <rect x="13" y="42" width="6" height="12" rx="3" />
       </g>
 
       {/* chest light */}
-      <circle cx="32" cy="49.5" r="2.2" className="text-electricblue" fill="currentColor" />
+      <circle cx="32" cy="49.5" r="2.2" className="text-brand" fill="currentColor" />
 
       {/* right arm (waves hello) */}
-      <g className={waving ? 'text-gymred gg-wave' : 'text-gymred'} fill="currentColor">
+      <g className={waving ? 'text-brand gg-wave' : 'text-brand'} fill="currentColor">
         <rect x="45" y="36" width="6" height="14" rx="3" />
       </g>
     </svg>
@@ -82,13 +82,13 @@ function Robot({ className = 'h-10 w-10', waving = false }) {
 function TypingIndicator() {
   return (
     <div className="gg-pop flex items-end gap-2" role="status" aria-live="polite">
-      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-electricblue bg-card">
+      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-brand bg-card">
         <Robot className="h-4 w-4" waving />
       </span>
       <span className="inline-flex items-center gap-1.5 rounded-2xl bg-card px-3.5 py-2.5">
-        <span className="gg-dot h-1.5 w-1.5 rounded-full bg-electricblue" style={{ animationDelay: '0ms' }} />
-        <span className="gg-dot h-1.5 w-1.5 rounded-full bg-electricblue" style={{ animationDelay: '150ms' }} />
-        <span className="gg-dot h-1.5 w-1.5 rounded-full bg-electricblue" style={{ animationDelay: '300ms' }} />
+        <span className="gg-dot h-1.5 w-1.5 rounded-full bg-brand" style={{ animationDelay: '0ms' }} />
+        <span className="gg-dot h-1.5 w-1.5 rounded-full bg-brand" style={{ animationDelay: '150ms' }} />
+        <span className="gg-dot h-1.5 w-1.5 rounded-full bg-brand" style={{ animationDelay: '300ms' }} />
         <span className="sr-only">Robo is typing…</span>
       </span>
     </div>
@@ -123,8 +123,8 @@ export default function Chatbot() {
     try {
       const { reply } = await api.post('/chatbot/ask', { message: text });
       setMessages((m) => [...m, { role: 'bot', text: reply }]);
-    } catch {
-      setMessages((m) => [...m, { role: 'bot', text: 'Sorry, I could not answer. Please call the gym directly.' }]);
+    } catch (error) {
+      setMessages((m) => [...m, { role: 'bot', text: error.message || 'Sorry, I could not answer. Please try again later.' }]);
     } finally { setBusy(false); }
   }
 
@@ -144,25 +144,25 @@ export default function Chatbot() {
         className="fixed bottom-5 right-5 z-50 flex items-end gap-2 text-left"
       >
         {bubbleVisible && (
-          <span className="gg-pop relative mb-1 max-w-[190px] rounded-2xl rounded-br-md border border-electricblue bg-card px-3 py-2 text-xs font-semibold leading-snug text-white shadow-lg">
+          <span className="gg-pop relative mb-1 max-w-[190px] rounded-2xl rounded-br-md border border-brand bg-card px-3 py-2 text-xs font-semibold leading-snug text-white shadow-lg">
             {open ? "Hello! 👋 I'm Robo. Ask me anything!" : 'Hello! 👋 Tap me to chat!'}
-            <span className="absolute -right-1.5 bottom-3 h-2.5 w-2.5 rotate-45 border-r border-b border-electricblue bg-card" />
+            <span className="absolute -right-1.5 bottom-3 h-2.5 w-2.5 rotate-45 border-r border-b border-brand bg-card" />
           </span>
         )}
-        <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full border-2 border-electricblue bg-card shadow-[0_0_18px_rgba(0,210,255,0.45)] transition-transform hover:scale-105">
+        <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full border-2 border-brand bg-card shadow-[0_0_18px_rgba(240,84,35,0.45)] transition-transform hover:scale-105">
           <Robot className="h-12 w-12" waving={waving} />
         </span>
       </button>
 
       {open && (
-        <div className="fixed bottom-24 right-5 z-40 flex h-96 w-80 flex-col rounded-2xl border border-electricblue bg-card shadow-2xl">
-          <div className="flex items-center gap-2 border-b border-electricblue p-3">
-            <span className="grid h-8 w-8 place-items-center rounded-full border border-electricblue bg-card">
+        <div className="fixed bottom-24 right-5 z-40 flex h-96 w-80 flex-col rounded-2xl border border-brand bg-card shadow-2xl">
+          <div className="flex items-center gap-2 border-b border-brand p-3">
+            <span className="grid h-8 w-8 place-items-center rounded-full border border-brand bg-card">
               <Robot className="h-6 w-6" />
             </span>
             <div>
               <p className="text-sm font-bold leading-tight">GoGym Assistant</p>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-electricblue">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-brand">
                 {busy ? 'Robo is typing…' : 'Robo · Online'}
               </p>
             </div>
@@ -178,16 +178,16 @@ export default function Chatbot() {
           <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto p-3 text-sm">
             {messages.map((m, i) => (
               <div key={i} className={m.role === 'user' ? 'text-right' : ''}>
-                <span className={`inline-block rounded-2xl px-3 py-1.5 ${m.role === 'user' ? 'bg-electricblue text-charcoal' : 'bg-card'}`}>{m.text}</span>
+                <span className={`inline-block rounded-2xl px-3 py-1.5 ${m.role === 'user' ? 'bg-brand text-charcoal' : 'bg-card'}`}>{m.text}</span>
               </div>
             ))}
             {busy && <TypingIndicator />}
           </div>
-          <div className="flex gap-2 border-t border-electricblue p-2">
+          <div className="flex gap-2 border-t border-brand p-2">
             <input value={input} onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && send()}
               className="flex-1 rounded-full bg-card px-3 py-2 text-sm outline-none" placeholder="Ask…" />
-            <button onClick={send} disabled={busy} className="rounded-full bg-gymred px-3 text-sm font-bold text-white disabled:opacity-50">
+            <button onClick={send} disabled={busy} className="rounded-full bg-brand px-3 text-sm font-bold text-white disabled:opacity-50">
               {busy ? '…' : 'Send'}
             </button>
           </div>

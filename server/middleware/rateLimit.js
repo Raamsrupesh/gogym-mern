@@ -2,10 +2,11 @@ import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { redis } from '../config/redis.js';
 
-const makeLimiter = (windowMs, max, prefix) =>
+const makeLimiter = (windowMs, max, prefix, options = {}) =>
   rateLimit({
     windowMs,
     max,
+    ...options,
     standardHeaders: true,
     legacyHeaders: false,
     store: new RedisStore({
@@ -16,6 +17,6 @@ const makeLimiter = (windowMs, max, prefix) =>
   });
 
 export const publicLimiter = makeLimiter(60_000, 60, 'rl:pub:');
-export const authLimiter = makeLimiter(10 * 60_000, 10, 'rl:auth:');
+export const authLimiter = makeLimiter(10 * 60_000, 10, 'rl:auth:', { skipSuccessfulRequests: true });
 export const chatbotLimiter = makeLimiter(60_000, 15, 'rl:bot:');
 export const uploadLimiter = makeLimiter(10 * 60_000, 10, 'rl:upload:');

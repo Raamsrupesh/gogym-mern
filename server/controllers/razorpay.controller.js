@@ -7,6 +7,7 @@ import Referral from '../models/Referral.js';
 import Counter from '../models/Counter.js';
 import { client, verifyPaymentSignature, verifyWebhookSignature } from '../services/razorpay.service.js';
 import { completeReferralForMember } from '../services/referrals.service.js';
+import { snapshotPlanFeatures } from '../services/membershipEntitlements.js';
 
 async function createRazorpayOrder(req, res, next) {
   let payment;
@@ -42,8 +43,12 @@ async function createRazorpayOrder(req, res, next) {
       newMemberDiscountReservedBy: { $exists: false },
     });
     let referralDiscount = 0;
-    if (referral?.newMemberDiscountInPaise > 0) {
-      const requested = Math.min(referral.newMemberDiscountInPaise, originalAmount - 100);
+    if (referral && (referral.newMemberDiscountPercent > 0 || referral.newMemberDiscountInPaise > 0)) {
+      const percentDiscount = Number.isFinite(referral.newMemberDiscountPercent)
+        ? Math.round(plan.priceInPaise * referral.newMemberDiscountPercent / 100)
+        : 0;
+      const requestedDiscount = percentDiscount || referral.newMemberDiscountInPaise || 0;
+      const requested = Math.min(requestedDiscount, originalAmount - 100);
       if (requested > 0) {
         const reserved = await Referral.findOneAndUpdate(
           { _id: referral._id, status: 'pending', newMemberDiscountReservedBy: { $exists: false }, newMemberDiscountAppliedAt: { $exists: false } },
@@ -86,7 +91,6 @@ async function createRazorpayOrder(req, res, next) {
       amount,
       currency: 'INR',
       receipt: `gogym_${Date.now()}`,
-      expire_by: Math.floor(Date.now() / 1000) + 30 * 60,
       notes: { planId: plan._id.toString(), memberId: req.user.sub },
     });
     payment.razorpayOrderId = order.id;
@@ -166,14 +170,7 @@ async function activatePaidOrder(orderId, razorpayPaymentId) {
   const membership = await Membership.create({
     member: payment.member,
     plan: plan._id,
-    planSnapshot: {
-      name: plan.name,
-      priceInPaise: plan.priceInPaise,
-      durationDays: plan.durationDays,
-      joiningFeeInPaise: plan.joiningFeeInPaise,
-      benefits: plan.benefits,
-      dietGuidance: plan.dietGuidance,
-    },
+    planSnapshot: snapshotPlanFeatures(plan),
     startDate: now,
     expiryDate,
     status: 'active',

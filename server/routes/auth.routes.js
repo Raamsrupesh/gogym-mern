@@ -9,6 +9,7 @@ import {
   refreshMemberSession,
   logOutMember,
   getCurrentUser,
+  updateMemberReminderConsent,
 } from '../controllers/auth.controller.js';
 
 router.post('/register', authLimiter, registerMember);
@@ -16,5 +17,6 @@ router.post('/login', authLimiter, logInMember);
 router.post('/refresh', refreshMemberSession);
 router.post('/logout', logOutMember);
 router.get('/me', authenticate, getCurrentUser);
+router.patch('/consent', authenticate, updateMemberReminderConsent);
 
 export default router;

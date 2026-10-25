@@ -2,10 +2,10 @@ import cron from 'node-cron';
 import Membership from '../models/Membership.js';
 import User from '../models/User.js';
 import ReminderLog from '../models/ReminderLog.js';
-import AdminReminder from '../models/AdminReminder.js';
 import { sendEmail } from '../services/email.service.js';
+import { sendRenewalWhatsApp } from '../services/whatsapp.service.js';
 
-const STAGES = [7, 3, 1, 0];
+const STAGES = [7, 3, 2, 1, 0];
 
 function istDayKey(date) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -30,31 +30,15 @@ async function processOnce() {
   }).populate('membership');
   for (const log of retries) {
     const user = await User.findById(log.member);
-    if (!user?.email) {
+    if (!log.membership || log.membership.status !== 'active' || log.membership.expiryDate <= now) {
       log.status = 'skipped';
-      log.channel = 'none';
-      log.error = 'No email';
+      log.error = 'Membership expired before reminder delivery';
       await log.save();
       continue;
     }
     const days = Number.parseInt(log.stage, 10);
-    log.status = 'queued';
-    log.error = undefined;
-    await log.save();
+    await deliverReminder(log, user, log.membership, days);
     attempted.add(log._id.toString());
-    try {
-      await sendEmail({
-        to: user.email,
-        subject: `Your GoGym membership expires in ${days} day(s)`,
-        text: `Hi ${user.name}, your membership expires on ${log.membership?.expiryDate?.toDateString() || 'today'}. Please renew at your gym.`,
-      });
-      log.status = 'sent';
-      log.sentAt = new Date();
-    } catch (error) {
-      log.status = 'failed';
-      log.error = error.message;
-    }
-    await log.save();
   }
 
   for (const days of STAGES) {
@@ -73,76 +57,87 @@ async function processOnce() {
       if (log && ['sent', 'skipped'].includes(log.status)) continue;
 
       const user = await User.findById(m.member);
-      if (!user?.email) {
-        if (!log) {
-          await ReminderLog.create({ membership: m._id, member: m.member, stage, status: 'skipped', channel: 'none', error: 'No email' });
-        }
-        continue;
-      }
       if (!log) {
         try {
-          log = await ReminderLog.create({ membership: m._id, member: m.member, stage, status: 'queued' });
+          log = await ReminderLog.create({ membership: m._id, member: m.member, stage, status: 'queued', channel: 'email_whatsapp' });
         } catch (error) {
           if (error.code === 11000) continue;
           throw error;
         }
-      } else {
-        log.status = 'queued';
-        log.error = undefined;
-        await log.save();
       }
       attempted.add(log._id.toString());
-      try {
-        await sendEmail({
-          to: user.email,
-          subject: `Your GoGym membership expires in ${days} day(s)`,
-          text: `Hi ${user.name}, your membership expires on ${m.expiryDate.toDateString()}. Please renew at your gym.`,
-        });
-        log.status = 'sent'; log.sentAt = new Date();
-        await log.save();
-      } catch (e) {
-        log.status = 'failed'; log.error = e.message;
-        await log.save();
-      }
+      await deliverReminder(log, user, m, days);
     }
   }
 }
 
-async function processAdminReminders() {
-  const due = await AdminReminder.find({ status: 'queued', scheduledAt: { $lte: new Date() } })
-    .sort({ scheduledAt: 1 })
-    .limit(100);
-  for (const reminder of due) {
-    const claimed = await AdminReminder.findOneAndUpdate(
-      { _id: reminder._id, status: 'queued' },
-      { $set: { status: 'sending', error: undefined } },
-      { new: true }
-    ).populate('member', 'name email');
-    if (!claimed) continue;
-    try {
-      if (!claimed.member?.email) throw new Error('Member has no email address');
-      await sendEmail({
-        to: claimed.member.email,
-        subject: claimed.title,
-        text: `Hi ${claimed.member.name},\n\n${claimed.message}`,
-      });
-      await AdminReminder.updateOne(
-        { _id: claimed._id, status: 'sending' },
-        { $set: { status: 'sent', sentAt: new Date() } }
-      );
-    } catch (error) {
-      await AdminReminder.updateOne(
-        { _id: claimed._id, status: 'sending' },
-        { $set: { status: 'failed', error: error.message } }
-      );
+async function deliverReminder(log, user, membership, days) {
+  const expiryDate = membership.expiryDate.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+  const message = `Hi ${user?.name || 'there'}, your GoGym membership expires ${days === 0 ? 'today' : `in ${days} days`} (${expiryDate}). Please renew to continue your training.`;
+
+  if (!['sent', 'skipped'].includes(log.emailStatus)) {
+    if (!user?.email) {
+      log.emailStatus = 'skipped';
+      log.emailError = 'No email address';
+    } else {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: `Your GoGym membership expires in ${days} day(s)`,
+          text: `${message} Contact the gym to renew.`,
+        });
+        log.emailStatus = 'sent';
+        log.emailError = undefined;
+        log.emailSentAt = new Date();
+      } catch (error) {
+        log.emailStatus = 'failed';
+        log.emailError = error.message;
+      }
     }
+  }
+
+  if (!['sent', 'skipped'].includes(log.whatsappStatus)) {
+    if (!user?.phone) {
+      log.whatsappStatus = 'skipped';
+      log.whatsappError = 'No phone number';
+    } else if (!user.consentMarketing) {
+      log.whatsappStatus = 'skipped';
+      log.whatsappError = 'Member has not opted in to WhatsApp reminders';
+    } else {
+      try {
+        await sendRenewalWhatsApp({
+          to: user.phone,
+          name: user.name,
+          days,
+          expiryDate,
+        });
+        log.whatsappStatus = 'sent';
+        log.whatsappError = undefined;
+        log.whatsappSentAt = new Date();
+      } catch (error) {
+        log.whatsappStatus = 'failed';
+        log.whatsappError = error.message;
+      }
+    }
+  }
+
+  const channelStatuses = [log.emailStatus, log.whatsappStatus];
+  const errors = [log.emailError, log.whatsappError].filter(Boolean);
+  log.channel = 'email_whatsapp';
+  log.status = channelStatuses.includes('failed')
+    ? 'failed'
+    : channelStatuses.includes('sent') ? 'sent' : 'skipped';
+  log.error = errors.length ? errors.join('; ') : undefined;
+  log.sentAt = log.emailSentAt || log.whatsappSentAt;
+  await log.save();
+  if (log.status === 'failed') {
+    console.error(`Membership reminder delivery failed (${log._id}, ${log.stage}): ${log.error}`);
   }
 }
 
 function start() {
   // daily at 08:30 IST
   cron.schedule('30 8 * * *', () => processOnce().catch((error) => console.error('Membership reminder job failed:', error)), { timezone: 'Asia/Kolkata' });
-  cron.schedule('* * * * *', () => processAdminReminders().catch((error) => console.error('Admin reminder job failed:', error)), { timezone: 'Asia/Kolkata' });
-  console.log('Reminder jobs scheduled (membership: Asia/Kolkata 08:30; admin: every minute)');
+  console.log('Membership reminder job scheduled (Asia/Kolkata 08:30)');
 }
-export { start, processOnce, processAdminReminders };
+export { start, processOnce };

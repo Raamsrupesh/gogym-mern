@@ -141,4 +141,21 @@ async function getCurrentUser(req, res, next) {
   }
 }
 
-export { registerMember, logInMember, refreshMemberSession, logOutMember, getCurrentUser };
+async function updateMemberReminderConsent(req, res, next) {
+  try {
+    if (typeof req.body.consentMarketing !== 'boolean') {
+      return res.status(400).json({ error: 'A boolean WhatsApp reminder preference is required' });
+    }
+    const user = await User.findOneAndUpdate(
+      { _id: req.user.sub, role: 'member' },
+      { $set: { consentMarketing: req.body.consentMarketing } },
+      { new: true }
+    );
+    if (!user) return res.status(404).json({ error: 'Member not found' });
+    res.json({ user: user.toSafe() });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export { registerMember, logInMember, refreshMemberSession, logOutMember, getCurrentUser, updateMemberReminderConsent };

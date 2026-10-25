@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Membership from '../models/Membership.js';
@@ -11,11 +12,12 @@ import Transformation from '../models/Transformation.js';
 import Referral from '../models/Referral.js';
 import Equipment from '../models/Equipment.js';
 import Feedback from '../models/Feedback.js';
-import GymNotification from '../models/GymNotification.js';
 import FeatureConfig from '../models/FeatureConfig.js';
-import { sendEmail } from '../services/email.service.js';
-import { transformationUploadDirectory } from '../config/uploads.js';
+import { memberDocumentUploadDirectory, transformationUploadDirectory } from '../config/uploads.js';
 import { createReferralClaim } from '../services/referrals.service.js';
+import { getWorkoutService } from '../data/workoutServices.js';
+import MemberReport from '../models/MemberReport.js';
+import { requireFeature } from '../services/membershipEntitlements.js';
 
 const staffRoles = ['owner', 'staff'];
 const isStaff = (req) => staffRoles.includes(req.user.role);
@@ -34,25 +36,37 @@ const istRange = (startKey, endKey) => ({
   $lt: new Date(`${endKey}T00:00:00+05:30`),
 });
 const memberIdFor = (req) => isStaff(req) ? req.query.memberId || req.body?.memberId : req.user.sub;
+const documentDetails = (file) => file && ({
+  filename: file.filename,
+  originalName: file.originalname,
+  mimeType: file.mimetype,
+});
+const safeDocument = (document) => document && ({
+  originalName: document.originalName,
+  mimeType: document.mimeType,
+});
 
-async function notifyMember(member, type, title, message) {
-  const notification = await GymNotification.create({
-    recipient: member._id, type, title, message,
-    emailStatus: member.email ? 'failed' : 'not_configured',
-    emailError: member.email ? undefined : 'No member email address',
-  });
-  if (member.email) {
-    try {
-      await sendEmail({ to: member.email, subject: title, text: message });
-      notification.emailStatus = 'sent';
-      notification.emailError = undefined;
-    } catch (error) {
-      notification.emailStatus = 'failed';
-      notification.emailError = error.message;
-    }
-    await notification.save();
+async function removeUploadedFile(file) {
+  if (!file?.path) return;
+  try {
+    await fs.unlink(file.path);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
   }
-  return notification;
+}
+
+async function rejectUploadedFile(req, res, status, message) {
+  await removeUploadedFile(req.file);
+  return res.status(status).json({ error: message });
+}
+
+function parseJsonField(value) {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }
 
 async function requireMember(id) {
@@ -140,24 +154,41 @@ export async function leaderboard(req, res, next) {
 
 export async function saveWorkoutPlan(req, res, next) {
   try {
-    const { memberId, title, description = '', exercises, status = 'published' } = req.body;
+    const { memberId, serviceId, exercises, status = 'published' } = req.body;
     if (!await requireMember(memberId)) return notFound(res);
-    if (!title || !Array.isArray(exercises) || !exercises.length) return invalid(res, 'Title and at least one exercise are required');
+    const access = await requireFeature(req, memberId, 'training_guidance');
+    if (access.error) return res.status(access.status).json({ error: access.error });
+    const service = getWorkoutService(serviceId);
+    if (!service || !Array.isArray(exercises) || !exercises.length) return invalid(res, 'Choose a service and provide at least one exercise');
     if (!['draft', 'published'].includes(status)) return invalid(res, 'Invalid plan status');
-    const plan = await WorkoutPlan.create({ member: memberId, createdBy: req.user.sub, title, description, exercises, status });
-    if (status === 'published') {
-      const member = await User.findById(memberId);
-      await notifyMember(member, 'workout_plan', 'Workout plan assigned', `A workout plan "${title}" is available in your GoGym dashboard.`);
+    for (const field of ['fitnessGoal', 'schedule', 'trainerNotes']) {
+      if (req.body[field] !== undefined && (typeof req.body[field] !== 'string' ||
+        req.body[field].length > { fitnessGoal: 500, schedule: 1000, trainerNotes: 2000 }[field])) {
+        return invalid(res, `Invalid ${field}`);
+      }
     }
+    const plan = await WorkoutPlan.create({
+      member: memberId, createdBy: req.user.sub, serviceId,
+      title: service.title, description: service.description, exercises, status,
+      fitnessGoal: req.body.fitnessGoal,
+      schedule: req.body.schedule,
+      trainerNotes: req.body.trainerNotes,
+    });
     res.status(201).json({ plan });
   } catch (error) { next(error); }
 }
 
 export async function listWorkoutPlans(req, res, next) {
   try {
-    const filter = isStaff(req)
-      ? (req.query.memberId ? { member: req.query.memberId } : {})
-      : { member: req.user.sub, status: { $in: ['published', 'archived'] } };
+    const memberId = isStaff(req) ? req.query.memberId : req.user.sub;
+    if (!memberId) return res.json({ plans: [] });
+    if (memberId) {
+      const access = await requireFeature(req, memberId, 'training_guidance');
+      if (access.error) return res.status(access.status).json({ error: access.error });
+    }
+    const filter = memberId
+      ? { member: memberId, ...(isStaff(req) ? {} : { status: { $in: ['published', 'archived'] } }) }
+      : {};
     if (req.query.status && isStaff(req)) filter.status = req.query.status;
     const plans = await WorkoutPlan.find(filter).populate('member', 'name').sort({ updatedAt: -1 }).limit(500);
     res.json({ plans });
@@ -168,14 +199,24 @@ export async function updateWorkoutPlan(req, res, next) {
   try {
     const plan = await WorkoutPlan.findById(req.params.id);
     if (!plan) return notFound(res);
-    for (const field of ['title', 'description', 'exercises', 'status']) {
+    const access = await requireFeature(req, plan.member, 'training_guidance');
+    if (access.error) return res.status(access.status).json({ error: access.error });
+    if (req.body.serviceId !== undefined) {
+      const service = getWorkoutService(req.body.serviceId);
+      if (!service) return invalid(res, 'Choose a valid service');
+      plan.serviceId = service.id;
+      plan.title = service.title;
+      plan.description = service.description;
+    }
+    for (const [field, maxLength] of Object.entries({ fitnessGoal: 500, schedule: 1000, trainerNotes: 2000 })) {
+      if (req.body[field] !== undefined && (typeof req.body[field] !== 'string' || req.body[field].length > maxLength)) {
+        return invalid(res, `Invalid ${field}`);
+      }
+    }
+    for (const field of ['exercises', 'status', 'fitnessGoal', 'schedule', 'trainerNotes']) {
       if (req.body[field] !== undefined) plan[field] = req.body[field];
     }
     await plan.save();
-    if (plan.status === 'published') {
-      const member = await User.findById(plan.member);
-      await notifyMember(member, 'workout_plan', 'Workout plan updated', `Your workout plan "${plan.title}" was updated.`);
-    }
     res.json({ plan });
   } catch (error) { next(error); }
 }
@@ -184,15 +225,51 @@ export async function savePerformance(req, res, next) {
   try {
     const memberId = isStaff(req) ? req.body.memberId : req.user.sub;
     if (!await requireMember(memberId)) return notFound(res);
+    const access = await requireFeature(req, memberId, 'progress_tracking');
+    if (access.error) return res.status(access.status).json({ error: access.error });
     const { exercise, sets, reps, weight, performedAt, notes } = req.body;
-    if (!exercise || !Number.isInteger(sets) || !Number.isInteger(reps) ||
+    const equipment = typeof req.body.equipment === 'string' ? req.body.equipment.trim() : '';
+    const exerciseName = equipment || (typeof exercise === 'string' ? exercise.trim() : '');
+    if (!exerciseName || exerciseName.length > 120 || !Number.isInteger(sets) || !Number.isInteger(reps) ||
       sets < 1 || reps < 1 || (weight !== undefined && (!Number.isFinite(weight) || weight < 0))) {
       return invalid(res, 'Exercise, positive sets/reps, and a non-negative weight are required');
     }
-    const record = await WorkoutPerformance.create({
-      member: memberId, recordedBy: req.user.sub, exercise, sets, reps, weight,
-      notes, performedAt: performedAt ? new Date(performedAt) : new Date(),
-    });
+    const recordDate = performedAt ? new Date(performedAt) : new Date();
+    if (!Number.isFinite(recordDate.getTime()) || recordDate > new Date() ||
+      (notes !== undefined && (typeof notes !== 'string' || notes.length > 1000))) {
+      return invalid(res, 'Provide a valid performance date and notes');
+    }
+    let record;
+    if (req.body.weekOf !== undefined || equipment) {
+      const weekDate = typeof req.body.weekOf === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.body.weekOf)
+        ? new Date(`${req.body.weekOf}T00:00:00Z`) : null;
+      if (!weekDate || !Number.isFinite(weekDate.getTime()) || weekDate > new Date()) {
+        return invalid(res, 'Choose a valid week that has started');
+      }
+      weekDate.setUTCDate(weekDate.getUTCDate() - ((weekDate.getUTCDay() + 6) % 7));
+      const equipmentKey = exerciseName.toLocaleLowerCase();
+      record = await WorkoutPerformance.findOneAndUpdate(
+        { member: memberId, equipmentKey, weekOf: weekDate },
+        { $set: {
+          exercise: exerciseName,
+          equipment: exerciseName,
+          equipmentKey,
+          weekOf: weekDate,
+          performedAt: recordDate,
+          weight,
+          sets,
+          reps,
+          notes,
+          recordedBy: req.user.sub,
+        } },
+        { new: true, upsert: true, runValidators: true }
+      );
+    } else {
+      record = await WorkoutPerformance.create({
+        member: memberId, recordedBy: req.user.sub, exercise: exerciseName, sets, reps, weight,
+        notes, performedAt: recordDate,
+      });
+    }
     res.status(201).json({ record });
   } catch (error) { next(error); }
 }
@@ -201,6 +278,8 @@ export async function listPerformance(req, res, next) {
   try {
     const memberId = isStaff(req) ? req.query.memberId : req.user.sub;
     if (!memberId) return invalid(res, 'memberId is required');
+    const access = await requireFeature(req, memberId, 'progress_tracking');
+    if (access.error) return res.status(access.status).json({ error: access.error });
     const records = await WorkoutPerformance.find({ member: memberId }).sort({ performedAt: 1 }).limit(2000);
     res.json({ records });
   } catch (error) { next(error); }
@@ -210,6 +289,8 @@ export async function saveTrainerNote(req, res, next) {
   try {
     const { memberId, weekOf, visibility = 'private' } = req.body;
     if (!await requireMember(memberId)) return notFound(res);
+    const access = await requireFeature(req, memberId, 'training_guidance');
+    if (access.error) return res.status(access.status).json({ error: access.error });
     if (!weekOf || !['private', 'published'].includes(visibility)) return invalid(res, 'Valid week and visibility are required');
     const note = await TrainerNote.create({
       member: memberId,
@@ -222,19 +303,21 @@ export async function saveTrainerNote(req, res, next) {
       nextWeekAdjustments: req.body.nextWeekAdjustments,
       visibility,
     });
-    if (visibility === 'published') {
-      const member = await User.findById(memberId);
-      await notifyMember(member, 'trainer_note', 'New trainer notes', 'Your trainer published notes and goals for your next training week.');
-    }
     res.status(201).json({ note });
   } catch (error) { next(error); }
 }
 
 export async function listTrainerNotes(req, res, next) {
   try {
-    const filter = isStaff(req)
-      ? (req.query.memberId ? { member: req.query.memberId } : {})
-      : { member: req.user.sub, visibility: 'published' };
+    const memberId = isStaff(req) ? req.query.memberId : req.user.sub;
+    if (!memberId) return res.json({ notes: [] });
+    if (memberId) {
+      const access = await requireFeature(req, memberId, 'training_guidance');
+      if (access.error) return res.status(access.status).json({ error: access.error });
+    }
+    const filter = memberId
+      ? { member: memberId, ...(isStaff(req) ? {} : { visibility: 'published' }) }
+      : {};
     const notes = await TrainerNote.find(filter).sort({ weekOf: -1 }).limit(500);
     res.json({ notes });
   } catch (error) { next(error); }
@@ -244,6 +327,8 @@ export async function updateTrainerNote(req, res, next) {
   try {
     const note = await TrainerNote.findById(req.params.id);
     if (!note) return notFound(res);
+    const access = await requireFeature(req, note.member, 'training_guidance');
+    if (access.error) return res.status(access.status).json({ error: access.error });
     for (const field of [
       'weekOf', 'observations', 'strengths', 'improvements', 'goals',
       'nextWeekAdjustments', 'visibility',
@@ -251,52 +336,239 @@ export async function updateTrainerNote(req, res, next) {
       if (req.body[field] !== undefined) note[field] = req.body[field];
     }
     await note.save();
-    if (note.visibility === 'published') {
-      const member = await User.findById(note.member);
-      await notifyMember(member, 'trainer_note', 'Trainer notes updated', 'Your trainer updated your training notes.');
-    }
     res.json({ note });
   } catch (error) { next(error); }
-}
-
-async function hasDietAccess(memberId) {
-  const memberships = await Membership.find({
-    member: memberId, status: 'active', expiryDate: { $gt: new Date() },
-  }).sort({ expiryDate: -1 });
-  return memberships.some((membership) => membership.startDate <= new Date() && membership.planSnapshot?.dietGuidance === true);
 }
 
 export async function listDietPlans(req, res, next) {
   try {
     const memberId = isStaff(req) ? req.query.memberId : req.user.sub;
     if (!memberId) return invalid(res, 'memberId is required');
-    if (!await hasDietAccess(memberId)) return res.status(403).json({ error: 'Active membership does not include diet guidance' });
-    const diets = await DietPlan.find({ member: memberId }).sort({ startsAt: -1 });
+    const access = await requireFeature(req, memberId, 'diet_chart');
+    if (access.error) return res.status(access.status).json({ error: access.error });
+    const diets = await DietPlan.find({ member: memberId }).sort({ startsAt: -1 }).lean();
+    for (const diet of diets) diet.document = safeDocument(diet.document);
     res.json({ diets });
   } catch (error) { next(error); }
 }
 
 export async function saveDietPlan(req, res, next) {
   try {
-    const { memberId, startsAt, endsAt, meals } = req.body;
-    if (!await requireMember(memberId)) return notFound(res);
-    if (!await hasDietAccess(memberId)) return res.status(403).json({ error: 'Member membership does not include diet guidance' });
+    const { memberId, startsAt, endsAt } = req.body;
+    if (!await requireMember(memberId)) return rejectUploadedFile(req, res, 404, 'Not found');
+    const access = await requireFeature(req, memberId, 'diet_chart');
+    if (access.error) return rejectUploadedFile(req, res, access.status, access.error);
+    const meals = parseJsonField(req.body.meals);
+    const mealsValid = meals === undefined || (Array.isArray(meals) && meals.length <= 20 && meals.every((meal) =>
+      meal && typeof meal.name === 'string' && meal.name.trim() && meal.name.length <= 100 &&
+      typeof meal.suggestions === 'string' && meal.suggestions.trim() && meal.suggestions.length <= 2000 &&
+      (meal.timing === undefined || (typeof meal.timing === 'string' && meal.timing.length <= 100))));
     if (!startsAt || !endsAt || !Number.isFinite(new Date(startsAt).getTime()) ||
       !Number.isFinite(new Date(endsAt).getTime()) || new Date(endsAt) < new Date(startsAt) ||
-      !Array.isArray(meals) || !meals.length) {
-      return invalid(res, 'A valid date range and at least one meal are required');
+      (!req.file && (!Array.isArray(meals) || !meals.length)) || !mealsValid) {
+      return rejectUploadedFile(req, res, 400, 'Provide a valid date range and at least one meal or diet chart file');
     }
     const diet = await DietPlan.create({
       member: memberId,
       trainer: req.user.sub,
+      title: typeof req.body.title === 'string' && req.body.title.trim()
+        ? req.body.title.trim().slice(0, 160) : 'Personalized diet chart',
       startsAt,
       endsAt,
-      meals,
+      meals: meals || [],
+      document: documentDetails(req.file),
       notes: req.body.notes,
+      dietaryRestrictions: req.body.dietaryRestrictions,
+      trainerNotes: req.body.trainerNotes,
     });
-    const member = await User.findById(memberId);
-    await notifyMember(member, 'diet_plan', 'Diet guidance published', 'Your trainer added diet guidance to your GoGym dashboard.');
-    res.status(201).json({ diet });
+    const result = diet.toObject();
+    result.document = safeDocument(result.document);
+    res.status(201).json({ diet: result });
+  } catch (error) {
+    try { await removeUploadedFile(req.file); } catch (cleanupError) { console.error('[UPLOAD CLEANUP]', cleanupError.message); }
+    next(error);
+  }
+}
+
+export async function updateDietPlan(req, res, next) {
+  try {
+    const diet = await DietPlan.findById(req.params.id);
+    if (!diet) return rejectUploadedFile(req, res, 404, 'Not found');
+    const access = await requireFeature(req, diet.member, 'diet_chart');
+    if (access.error) return rejectUploadedFile(req, res, access.status, access.error);
+    const startsAt = req.body.startsAt ?? diet.startsAt;
+    const endsAt = req.body.endsAt ?? diet.endsAt;
+    const meals = req.body.meals === undefined ? diet.meals : parseJsonField(req.body.meals);
+    const mealsValid = meals === undefined || (Array.isArray(meals) && meals.length <= 20 && meals.every((meal) =>
+      meal && typeof meal.name === 'string' && meal.name.trim() && meal.name.length <= 100 &&
+      typeof meal.suggestions === 'string' && meal.suggestions.trim() && meal.suggestions.length <= 2000 &&
+      (meal.timing === undefined || (typeof meal.timing === 'string' && meal.timing.length <= 100))));
+    if (!Number.isFinite(new Date(startsAt).getTime()) || !Number.isFinite(new Date(endsAt).getTime()) ||
+      new Date(endsAt) < new Date(startsAt) || (!req.file && (!Array.isArray(meals) || !meals.length)) ||
+      !mealsValid) {
+      return rejectUploadedFile(req, res, 400, 'Provide a valid date range and up to 20 meals with food details, or upload a diet chart');
+    }
+    for (const [field, maxLength] of Object.entries({ title: 160, dietaryRestrictions: 2000, notes: 2000, trainerNotes: 2000 })) {
+      if (req.body[field] !== undefined && (typeof req.body[field] !== 'string' || req.body[field].length > maxLength)) {
+        return rejectUploadedFile(req, res, 400, `Invalid ${field}`);
+      }
+      if (req.body[field] !== undefined) diet[field] = req.body[field];
+    }
+    diet.startsAt = startsAt;
+    diet.endsAt = endsAt;
+    diet.meals = meals || [];
+    if (req.file) diet.document = documentDetails(req.file);
+    await diet.save();
+    const result = diet.toObject();
+    result.document = safeDocument(result.document);
+    res.json({ diet: result });
+  } catch (error) {
+    try { await removeUploadedFile(req.file); } catch (cleanupError) { console.error('[UPLOAD CLEANUP]', cleanupError.message); }
+    next(error);
+  }
+}
+
+const reportEntitlements = {
+  bmi_report: 'bmi_report',
+  body_measurements: 'body_measurements',
+  progress_assessment: 'progress_tracking',
+};
+const measurementFields = ['chest', 'waist', 'hips', 'leftArm', 'rightArm', 'leftThigh', 'rightThigh', 'shoulders'];
+
+function validateReport(type, input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  if (type === 'bmi_report') {
+    const { heightCm, weightKg, notes = '' } = input;
+    if (heightCm === undefined && weightKg === undefined && typeof notes === 'string' && notes.length <= 2000) {
+      return { notes };
+    }
+    if (!Number.isFinite(heightCm) || heightCm < 50 || heightCm > 260 ||
+      !Number.isFinite(weightKg) || weightKg < 10 || weightKg > 500 ||
+      typeof notes !== 'string' || notes.length > 2000) return null;
+    const heightM = heightCm / 100;
+    return { heightCm, weightKg, bmi: Number((weightKg / (heightM * heightM)).toFixed(1)), notes };
+  }
+  if (type === 'body_measurements') {
+    const { units = 'cm', notes = '' } = input;
+    if (!['cm', 'in'].includes(units) || typeof notes !== 'string' || notes.length > 2000) return null;
+    const measurements = {};
+    for (const field of measurementFields) {
+      if (input[field] === undefined || input[field] === '') continue;
+      if (!Number.isFinite(input[field]) || input[field] <= 0 || input[field] > 300) return null;
+      measurements[field] = input[field];
+    }
+    return Object.keys(measurements).length ? { units, measurements, notes } : null;
+  }
+  if (type === 'progress_assessment') {
+    const textFields = ['fitnessGoal', 'observations', 'trainerObservations', 'recommendedAdjustments'];
+    if (textFields.some((field) => input[field] !== undefined &&
+      (typeof input[field] !== 'string' || input[field].length > 3000))) return null;
+    const adherence = input.trainingAdherence;
+    if (adherence !== undefined && (!Number.isInteger(adherence) || adherence < 0 || adherence > 100)) return null;
+    let followUpDate;
+    if (input.followUpDate) {
+      followUpDate = new Date(input.followUpDate);
+      if (!Number.isFinite(followUpDate.getTime())) return null;
+    }
+    return {
+      fitnessGoal: input.fitnessGoal || '',
+      observations: input.observations || '',
+      trainingAdherence: adherence,
+      trainerObservations: input.trainerObservations || '',
+      recommendedAdjustments: input.recommendedAdjustments || '',
+      followUpDate,
+    };
+  }
+  return null;
+}
+
+export async function listMemberReports(req, res, next) {
+  try {
+    const { reportType } = req.params;
+    const feature = reportEntitlements[reportType];
+    if (!feature) return notFound(res);
+    const memberId = isStaff(req) ? req.query.memberId : req.user.sub;
+    if (!memberId) return invalid(res, 'memberId is required');
+    const access = await requireFeature(req, memberId, feature);
+    if (access.error) return res.status(access.status).json({ error: access.error });
+    const reports = await MemberReport.find({ member: memberId, type: reportType })
+      .populate('trainer', 'name')
+      .sort({ assessmentDate: -1, createdAt: -1 })
+      .limit(500);
+    res.json({ reports: reports.map((report) => {
+      const result = report.toObject();
+      result.document = safeDocument(result.document);
+      return result;
+    }) });
+  } catch (error) { next(error); }
+}
+
+export async function saveMemberReport(req, res, next) {
+  try {
+    const { reportType } = req.params;
+    const feature = reportEntitlements[reportType];
+    if (!feature) return rejectUploadedFile(req, res, 404, 'Not found');
+    const { memberId, assessmentDate = new Date() } = req.body;
+    if (!await requireMember(memberId)) return rejectUploadedFile(req, res, 404, 'Not found');
+    const access = await requireFeature(req, memberId, feature);
+    if (access.error) return rejectUploadedFile(req, res, access.status, access.error);
+    const date = new Date(assessmentDate);
+    const reportInput = parseJsonField(req.body.data);
+    const input = reportInput === undefined && reportType === 'bmi_report' && req.file
+      ? { notes: '' } : reportInput;
+    const data = validateReport(reportType, input);
+    if (!Number.isFinite(date.getTime()) || date > new Date() || !data) {
+      return rejectUploadedFile(req, res, 400, 'Provide a valid assessment date and report details');
+    }
+    const report = await MemberReport.create({
+      member: memberId,
+      trainer: req.user.sub,
+      type: reportType,
+      assessmentDate: date,
+      data,
+      document: req.file ? documentDetails(req.file) : undefined,
+    });
+    const result = report.toObject();
+    result.document = safeDocument(result.document);
+    res.status(201).json({ report: result });
+  } catch (error) {
+    try { await removeUploadedFile(req.file); } catch (cleanupError) { console.error('[UPLOAD CLEANUP]', cleanupError.message); }
+    next(error);
+  }
+}
+
+export async function serveMemberReportDocument(req, res, next) {
+  try {
+    if (req.params.reportType !== 'bmi_report') return notFound(res);
+    const report = await MemberReport.findOne({ _id: req.params.id, type: req.params.reportType });
+    if (!report?.document?.filename) return notFound(res);
+    const access = await requireFeature(req, report.member, 'bmi_report');
+    if (access.error) return res.status(access.status).json({ error: access.error });
+    res.set({
+      'Cache-Control': 'private, no-store',
+      'Content-Type': report.document.mimeType,
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(report.document.originalName)}`,
+    });
+    res.sendFile(report.document.filename, { root: memberDocumentUploadDirectory }, (error) => {
+      if (error) next(error);
+    });
+  } catch (error) { next(error); }
+}
+
+export async function serveDietPlanDocument(req, res, next) {
+  try {
+    const diet = await DietPlan.findById(req.params.id);
+    if (!diet?.document?.filename) return notFound(res);
+    const access = await requireFeature(req, diet.member, 'diet_chart');
+    if (access.error) return res.status(access.status).json({ error: access.error });
+    res.set({
+      'Cache-Control': 'private, no-store',
+      'Content-Type': diet.document.mimeType,
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(diet.document.originalName)}`,
+    });
+    res.sendFile(diet.document.filename, { root: memberDocumentUploadDirectory }, (error) => {
+      if (error) next(error);
+    });
   } catch (error) { next(error); }
 }
 
@@ -327,6 +599,18 @@ export async function listTransformations(req, res, next) {
   } catch (error) { next(error); }
 }
 
+export async function listPublicTransformations(_req, res, next) {
+  try {
+    const transformations = await Transformation.find({ status: 'published', consentGranted: true })
+      .select('description beforeDate afterDate createdAt')
+      .sort({ createdAt: -1 })
+      .limit(60)
+      .lean();
+    res.set('Cache-Control', 'no-store');
+    res.json({ transformations });
+  } catch (error) { next(error); }
+}
+
 export async function updateTransformation(req, res, next) {
   try {
     const transformation = await Transformation.findById(req.params.id);
@@ -338,6 +622,24 @@ export async function updateTransformation(req, res, next) {
     transformation.status = req.body.status;
     await transformation.save();
     res.json({ transformation });
+  } catch (error) { next(error); }
+}
+
+export async function servePublicTransformationImage(req, res, next) {
+  try {
+    const item = await Transformation.findOne({
+      _id: req.params.id,
+      status: 'published',
+      consentGranted: true,
+    });
+    if (!item) return notFound(res);
+    const filename = req.params.image === 'before' ? item.beforeImage
+      : req.params.image === 'after' ? item.afterImage : null;
+    if (!filename) return notFound(res);
+    res.set('Cache-Control', 'no-store');
+    res.sendFile(filename, { root: transformationUploadDirectory }, (error) => {
+      if (error) next(error);
+    });
   } catch (error) { next(error); }
 }
 
@@ -387,7 +689,7 @@ export async function getReferral(req, res, next) {
       code: enabled ? user.referralCode : null,
       enabled,
       reward: config?.referralReward || '',
-      newMemberDiscountInPaise: config?.newMemberDiscountInPaise || 0,
+      newMemberDiscountPercent: config?.newMemberDiscountPercent || 0,
       referrerDiscountInPaise: config?.referrerDiscountInPaise || 0,
       availableDiscountInPaise: Math.max(
         0,
@@ -455,15 +757,16 @@ export async function manageReferral(req, res, next) {
 
 export async function updateReferralConfig(req, res, next) {
   try {
-    const { referralsEnabled, referralReward = '', newMemberDiscountInPaise, referrerDiscountInPaise } = req.body;
+    const { referralsEnabled, referralReward = '', newMemberDiscountPercent, referrerDiscountInPaise } = req.body;
     if (typeof referralsEnabled !== 'boolean' || typeof referralReward !== 'string' || referralReward.length > 200 ||
-      !Number.isSafeInteger(newMemberDiscountInPaise) || newMemberDiscountInPaise < 0 ||
+      !Number.isFinite(newMemberDiscountPercent) || newMemberDiscountPercent < 0 || newMemberDiscountPercent > 100 ||
+      Math.abs(newMemberDiscountPercent * 100 - Math.round(newMemberDiscountPercent * 100)) > 1e-8 ||
       !Number.isSafeInteger(referrerDiscountInPaise) || referrerDiscountInPaise < 0) {
-      return invalid(res, 'Provide valid referral enablement, reward text, and non-negative discount amounts in paise');
+      return invalid(res, 'Provide valid referral enablement, a percentage from 0 to 100, reward text, and a non-negative referrer credit in paise');
     }
     const config = await FeatureConfig.findOneAndUpdate(
       { singleton: 'main' },
-      { $set: { referralsEnabled, referralReward, newMemberDiscountInPaise, referrerDiscountInPaise } },
+      { $set: { referralsEnabled, referralReward, newMemberDiscountPercent, referrerDiscountInPaise } },
       { upsert: true, new: true, runValidators: true }
     );
     res.json({ config });
@@ -571,22 +874,5 @@ export async function updateFeedback(req, res, next) {
     const feedback = await Feedback.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
     if (!feedback) return notFound(res);
     res.json({ feedback });
-  } catch (error) { next(error); }
-}
-
-export async function listNotifications(req, res, next) {
-  try {
-    const notifications = await GymNotification.find({ recipient: req.user.sub }).sort({ createdAt: -1 }).limit(200);
-    res.json({ notifications });
-  } catch (error) { next(error); }
-}
-
-export async function markNotificationRead(req, res, next) {
-  try {
-    const notification = await GymNotification.findOneAndUpdate(
-      { _id: req.params.id, recipient: req.user.sub }, { readAt: new Date() }, { new: true }
-    );
-    if (!notification) return notFound(res);
-    res.json({ notification });
   } catch (error) { next(error); }
 }
