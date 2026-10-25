@@ -47,10 +47,6 @@ export const api = {
   postRaw: (p, body) => call(p, { method: 'POST', body, raw: true }),
   patchRaw: (p, body) => call(p, { method: 'PATCH', body, raw: true }),
   delete: (path) => call(path, { method: 'DELETE' }),
-  invoice: async (id) => {
-    const res = await fetch(`${API}/invoices/${id}`, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!res.ok) throw new Error('Download failed');
-    return res.blob();
-  },
+  invoice: async (id) => (await call(`/invoices/${id}`)).blob(),
 };
 export { tryRefresh };

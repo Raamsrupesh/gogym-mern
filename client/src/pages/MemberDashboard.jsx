@@ -10,6 +10,7 @@ export default function MemberDashboard() {
   const [reminderConsent, setReminderConsent] = useState(!!user?.consentMarketing);
   const [consentMessage, setConsentMessage] = useState('');
   const [consentError, setConsentError] = useState('');
+  const [receiptError, setReceiptError] = useState('');
   useEffect(() => { api.get('/members/me').then(setData); }, []);
   useEffect(() => { setReminderConsent(!!user?.consentMarketing); }, [user?.consentMarketing]);
   if (!data) return <p className="p-8 text-white">Loading…</p>;
@@ -17,9 +18,21 @@ export default function MemberDashboard() {
     data.memberships.find((m) => m.status === 'active' && new Date(m.expiryDate) > new Date());
 
   async function download(paymentId) {
-    const blob = await api.invoice(paymentId);
-    const url = URL.createObjectURL(blob);
-    window.open(url);
+    setReceiptError('');
+    const receiptWindow = window.open('', '_blank');
+    if (!receiptWindow) {
+      setReceiptError('Allow pop-ups to view your receipt.');
+      return;
+    }
+    try {
+      const blob = await api.invoice(paymentId);
+      const url = URL.createObjectURL(blob);
+      receiptWindow.location.href = url;
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      receiptWindow.close();
+      setReceiptError(error.message);
+    }
   }
 
   async function saveReminderConsent(e) {
@@ -75,6 +88,7 @@ export default function MemberDashboard() {
 
       <section className="mt-8 rounded-2xl border border-brand bg-card p-6">
         <h2 className="text-xl font-bold">Payments</h2>
+        {receiptError && <p role="alert" className="mt-2 text-sm text-brand">{receiptError}</p>}
         <div className="mt-3 divide-y divide-brand">
           {data.payments.map((p) => (
             <div key={p._id} className="flex items-center justify-between py-3">
