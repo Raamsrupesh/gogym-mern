@@ -17,9 +17,9 @@ async function downloadPaymentReceipt(req, res, next) {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="receipt-${payment.invoiceNumber || payment._id}.pdf"`
+      `inline; filename="receipt-${payment.invoiceNumber || payment._id}.pdf"`
     );
-    const receipt = buildReceipt({
+    const receipt = await buildReceipt({
       business: settings,
       receiptNumber: payment.invoiceNumber || String(payment._id),
       issueDate: (payment.paidAt || payment.createdAt).toISOString().slice(0, 10),

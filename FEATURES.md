@@ -11,7 +11,7 @@ This file is the current feature inventory. Keep it updated whenever a project c
 - Owner-managed membership plans, plan benefits, pricing, joining fees, and diet-chart, BMI-report, body-measurement, and progress-tracking entitlements.
 - Online Razorpay membership checkout and payment verification/webhook handling.
 - Owner-recorded offline payments and membership activation.
-- Payment records, invoice numbers, and invoice downloads.
+- Payment records, invoice numbers, and receipts viewable as PDFs from the member dashboard.
 - Automatic membership renewal reminders at 7, 3, 2, and 1 days before expiry, plus the expiry date, are sent by email and (with member opt-in and WhatsApp Cloud API configured) WhatsApp. Delivery is automated and is not managed in the owner dashboard.
 
 ## Attendance and leaderboard
@@ -30,6 +30,7 @@ This file is the current feature inventory. Keep it updated whenever a project c
 ## Member engagement
 - Transformation photo uploads with member consent, private image delivery, and public home-page display only after consent and publication.
 - Referral codes generated only while the owner has enabled referrals.
+- Members can share their referral code directly through WhatsApp.
 - Owner-configured new-member discount, applied to the new member's first successful online membership payment.
 - Owner-configured referrer discount credit, earned after a referred member's successful payment and applied to the referrer's next online membership checkout.
 - Private member feedback with owner/staff response and resolution.

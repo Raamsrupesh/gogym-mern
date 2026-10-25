@@ -43,8 +43,12 @@ async function buildReceipt({
     throw new Error('amountInPaise must be a non-negative integer.');
   }
 
-  // Download before creating the PDF so failures reject cleanly.
-  const logo = await getLogo();
+  let logo;
+  try {
+    logo = await getLogo();
+  } catch (error) {
+    console.warn('Receipt logo unavailable; generating the receipt without it:', error.message);
+  }
 
   const doc = new PDFDocument({
     size: 'A4',
@@ -204,11 +208,13 @@ async function buildReceipt({
   // Business header
   box(left, 54, width, 64);
 
-  doc.image(logo, left + 8, 61, {
-    fit: [85, 47],
-    align: 'center',
-    valign: 'center',
-  });
+  if (logo) {
+    doc.image(logo, left + 8, 61, {
+      fit: [85, 47],
+      align: 'center',
+      valign: 'center',
+    });
+  }
 
   text(businessName, left + 110, 61, width - 118, {
     size: 13,
